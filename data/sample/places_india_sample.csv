@@ -1,0 +1,23 @@
+name,city,state,category,rating,lat,lon,avg_time_hours,entry_fee_inr,best_time
+Taj Mahal,Agra,Uttar Pradesh,Monument;History;UNESCO,4.8,27.1751,78.0421,2.5,1100,Oct-Mar
+Agra Fort,Agra,Uttar Pradesh,Fort;History;UNESCO,4.6,27.1795,78.0211,2.0,650,Oct-Mar
+Amber Fort,Jaipur,Rajasthan,Fort;History;Architecture,4.6,26.9855,75.8513,2.5,200,Oct-Mar
+Hawa Mahal,Jaipur,Rajasthan,Palace;Architecture;History,4.5,26.9239,75.8267,1.0,50,Oct-Mar
+Jantar Mantar,Jaipur,Rajasthan,Monument;Science;UNESCO,4.4,26.9247,75.8245,1.0,200,Oct-Mar
+India Gate,New Delhi,Delhi,Monument;History,4.6,28.6129,77.2295,1.0,0,All year
+Red Fort,New Delhi,Delhi,Fort;History;UNESCO,4.4,28.6562,77.2410,2.0,500,Oct-Mar
+Qutub Minar,New Delhi,Delhi,Monument;History;UNESCO,4.5,28.5245,77.1855,1.5,500,Oct-Mar
+Gateway of India,Mumbai,Maharashtra,Monument;History,4.6,18.9220,72.8347,1.0,0,Nov-Feb
+Marine Drive,Mumbai,Maharashtra,Scenic;Walk;Food,4.5,18.9442,72.8231,1.5,0,Nov-Feb
+Elephanta Caves,Mumbai,Maharashtra,Heritage;UNESCO;History,4.4,18.9633,72.9314,3.0,750,Nov-Feb
+Mysore Palace,Mysuru,Karnataka,Palace;Architecture;History,4.7,12.3052,76.6552,2.0,100,All year
+Hampi Ruins,Hampi,Karnataka,Heritage;UNESCO;History,4.7,15.3350,76.4610,5.0,500,Nov-Feb
+Golden Temple,Amritsar,Punjab,Temple;Spiritual;Food,4.9,31.6200,74.8765,2.0,0,Oct-Mar
+Meenakshi Temple,Madurai,Tamil Nadu,Temple;Spiritual;Architecture,4.7,9.9195,78.1193,2.0,0,Nov-Feb
+Calangute Beach,Goa,Goa,Beach;Adventure;Food;Nightlife,4.4,15.5527,73.7517,4.0,0,Nov-Feb
+Dudhsagar Falls,Goa,Goa,Waterfall;Nature;Adventure,4.6,15.3144,74.3144,4.0,400,Oct-Jan
+Charminar,Hyderabad,Telangana,Monument;History;Food,4.5,17.3616,78.4747,1.0,25,All year
+Dal Lake,Srinagar,Jammu & Kashmir,Scenic;Nature;Adventure,4.6,34.1210,74.8500,3.0,300,May-Sep
+Victoria Memorial,Kolkata,West Bengal,Museum;History;Architecture,4.6,22.5645,88.3426,2.0,500,Oct-Mar
+Ranthambore National Park,Sawai Madhopur,Rajasthan,Wildlife;Nature;Adventure,4.5,26.0173,76.5026,5.0,1500,Oct-Apr
+Jim Corbett National Park,Nainital,Uttarakhand,Wildlife;Nature;Adventure,4.5,29.5300,78.7747,5.0,1500,Nov-Jun

@@ -1,0 +1,17 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Datasets (don't commit big CSVs — keep them local)
+data/raw/*.csv
+
+# IDE
+.vscode/
+.idea/
