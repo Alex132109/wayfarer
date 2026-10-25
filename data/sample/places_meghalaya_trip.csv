@@ -1,0 +1,13 @@
+name,city,state,category,rating,lat,lon,avg_time_hours,entry_fee_inr,best_time,suggested_days
+Berhampur,Berhampur,Odisha,City;Transit;Food,4.0,19.3133,84.7928,0.5,0,All year,0
+Guwahati,Guwahati,Assam,City;Transit;Food,4.0,26.1445,91.7362,1.0,0,All year,0
+Umiam Lake,Shillong,Meghalaya,Lake;Scenic;Adventure,4.5,25.6600,91.8900,2.0,50,Oct-Apr,0.5
+Shillong (Police Bazar & Ward's Lake),Shillong,Meghalaya,City;Viewpoint;Food;Cafes,4.4,25.5788,91.8933,4.0,0,Mar-Jun,1
+Laitlum Canyon,Shillong,Meghalaya,Trek;Viewpoint;Scenic;Adventure,4.6,25.4980,91.9480,3.0,0,Oct-Apr,0.5
+Cherrapunji (Sohra) Waterfalls & Caves,Sohra,Meghalaya,Waterfall;Cave;Viewpoint;Nature,4.7,25.3000,91.5833,6.0,100,Jun-Sep,2
+Nongriat Double-Decker Root Bridge,Sohra,Meghalaya,Trek;Nature;Adventure,4.8,25.2600,91.7100,6.0,50,Oct-Apr,1
+Mawsynram (Mawjymbuin Cave),Mawsynram,Meghalaya,Cave;Nature,4.3,25.2973,91.5832,2.0,30,Jun-Sep,0.5
+Dawki (Umngot River Boating),Dawki,Meghalaya,River;Boating;Border;Adventure,4.6,25.1900,92.0200,4.0,600,Nov-Apr,1
+Mawlynnong Village & Sky View,Mawlynnong,Meghalaya,Village;Nature;Walk,4.5,25.2000,92.1200,2.5,50,All year,0.5
+Krang Suri Falls,Amlarem,Meghalaya,Waterfall;Adventure;Scenic,4.6,25.1800,92.1500,3.0,80,Oct-Apr,0.5
+Krem Chympe Cave,Jaintia Hills,Meghalaya,Cave;Adventure;Trek,4.5,25.4167,92.4333,5.0,0,Oct-Apr,1

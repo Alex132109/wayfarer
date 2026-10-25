@@ -62,10 +62,13 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 - [x] Rank places by cosine similarity to user interests
 - [x] Test: `interests = ["beach", "adventure"]` → Goa showed up 🏖️
 
-### Week 3 — Route Optimization
-- [ ] Split selected places into N days (cluster by geography)
-- [ ] Order each day's places with nearest-neighbor + 2-opt
-- [ ] Generate 2–3 itinerary variants (e.g., "Relaxed" vs "Packed" vs "Balanced")
+### Week 3 — Route Optimization 🗺️ ✅ CORE DONE
+- [x] Order places origin → destination (greedy detour rule + 2-opt)
+- [x] Corridor filter — drops far-off candidates (no Mumbai on a Delhi→Agra trip)
+- [x] Round trips (start = end) — e.g. Berhampur → Meghalaya loop → Berhampur
+- [x] Day-wise plan with stay allocation (5 days → 1 Shillong · 2 Sohra · 1 Dawki · 1 caves)
+- [x] Long-drive warnings (~990 km legs flagged with buffer-day advice)
+- [ ] Generate 2–3 itinerary variants ("Relaxed" vs "Packed")
 - [ ] Add hotels & food recommendations per itinerary
 
 ### Week 4 — Web App & Deploy
@@ -91,8 +94,8 @@ wayfarer/
 │   ├── data_loader.py         ← load + clean + distance math (working ✅)
 │   ├── build_world_dataset.py ← downloads worldwide UNESCO data (Phase 2 ✨)
 │   ├── recommender.py         ← place recommender — first ML model (✅ done)
-│   ├── router.py              ← route optimization (Week 3)
-│   └── itinerary.py           ← puts it all together (Week 3)
+│   ├── router.py              ← route optimizer: greedy + 2-opt + round trips (✅)
+│   └── itinerary.py           ← trip planner brain: corridor filter, days & stays (✅)
 └── app/
     └── app.py                 ← Streamlit web app (Week 4)
 ```
