@@ -24,3 +24,6 @@ data/cache/
 
 # generated exports (user downloads, not source)
 exports/
+
+# local demo database (user data stays on the machine)
+data/*.db
