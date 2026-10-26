@@ -77,6 +77,22 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 - [ ] Deploy free on **Streamlit Community Cloud** or **Hugging Face Spaces**
 - [ ] Write a short project report / LinkedIn post with screenshots
 
+### Phase 1 — "Planner Pro" (the ML wishlist) ✅ BUILT
+- [x] Budget engine — 6 trip style tiers (budget → super-luxury) with cost multipliers
+      + meal caps + intercity planning rates (`src/trip_money.py`)
+- [x] Food recommender — second ML model! TF-IDF dish matching with hard diet
+      filters (veg / vegan / eggetarian) (`src/food_recommender.py`)
+- [x] Hotel recommender — budget-fit stays + ONE honest "a little more" upsell
+- [x] Daily guide — time-boxed + budget-boxed schedules: every sight gets a MAX
+      stay time ('max 1h15 — beyond this the next itinerary item gets skipped')
+      (`src/daily_guide.py`)
+- [x] Phobia filters — heights / dark / water / crowds → warn + skip places
+- [x] Essentials checklist — documents + climate packing hints,
+      domestic vs foreign aware (`essentials_list`)
+- [x] Editable `TripPlan` — pass `stops` or `interests`; edit anything
+      (`style`, `days`, `travellers`, `diet`, `skip_places`) → everything recomputes
+      (`src/trip_plan.py`)
+
 ---
 
 ## 📁 Project Structure
@@ -91,14 +107,22 @@ wayfarer/
 │   ├── sample/                ← starter datasets (work from Day 1, no downloads)
 │   │   ├── places_india_sample.csv
 │   │   ├── places_meghalaya_trip.csv
-│   │   └── places_japan_sample.csv
+│   │   ├── places_japan_sample.csv
+│   │   ├── food_india_sample.csv        ← dish tips: dish, diet, price, rating
+│   │   ├── food_japan_sample.csv
+│   │   ├── hotels_india_sample.csv      ← stays: price/night, style, rating
+│   │   └── hotels_japan_sample.csv
 │   └── processed/             ← cleaned data (generated)
 ├── src/
 │   ├── data_loader.py         ← load + clean + distance math (working ✅)
 │   ├── build_world_dataset.py ← downloads worldwide UNESCO data (Phase 2 ✨)
 │   ├── recommender.py         ← place recommender — first ML model (✅ done)
 │   ├── router.py              ← route optimizer: greedy + 2-opt + round trips (✅)
-│   └── itinerary.py           ← trip planner brain: corridor filter, days & stays (✅)
+│   ├── itinerary.py           ← trip planner brain: corridor filter, days & stays (✅)
+│   ├── trip_money.py          ← budget engine: trip styles, meal caps, emergency fund (✅)
+│   ├── food_recommender.py    ← food + hotel recommenders — second ML model (✅)
+│   ├── daily_guide.py         ← daily guide builder: phobia filters, essentials (✅)
+│   └── trip_plan.py           ← editable TripPlan: edit anything → recompute (✅)
 └── app/
     └── app.py                 ← Streamlit web app (✅ done)
 ```
@@ -122,6 +146,12 @@ python src\data_loader.py
 
 # 4. Launch the website! 🌐
 .venv\Scripts\streamlit run app\app.py
+
+# 5. Phase 1 ML modules (each is runnable + self-checking)
+.venv\Scripts\python src\trip_money.py       # budget engine + trip style tiers
+.venv\Scripts\python src\food_recommender.py # food + hotel recommenders
+.venv\Scripts\python src\daily_guide.py      # daily guide builder
+.venv\Scripts\python src\trip_plan.py        # editable TripPlan (the full demo!)
 ```
 
 If that prints a nice table of Indian destinations — you're ready. 🎉
