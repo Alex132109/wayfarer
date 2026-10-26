@@ -30,3 +30,6 @@ exports/
 
 # local demo database (user data stays on the machine)
 data/*.db
+
+# GeoNames world-cities (30 MB, regenerable in ~1 min via the script)
+data/raw/cities_world.csv
