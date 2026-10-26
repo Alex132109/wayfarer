@@ -242,6 +242,14 @@ class TripPlanner:
             segments.append({"place": "  →  ".join(stops), "days": 1, "en_route": [],
                              "drive_km": arrival, "stay_town": cityof.get(last, "")})
             prev = last
+
+        # Days > stops? The leftovers become BUFFER days at the last stop
+        # (real-travel behaviour: extra time to relax where you ended up).
+        # This keeps the invariant: days always sum EXACTLY to trip length.
+        allocated = sum(s["days"] for s in segments)
+        leftover = total_days - allocated
+        if leftover > 0 and segments:
+            segments[-1]["days"] += leftover
         return segments
 
 
