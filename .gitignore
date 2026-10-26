@@ -15,6 +15,9 @@ data/raw/*.csv
 # Streamlit secrets (API keys NEVER go in code or git)
 .streamlit/secrets.toml
 
+# OSRM road-km cache (regenerable from the network)
+data/cache/
+
 # IDE
 .vscode/
 .idea/
