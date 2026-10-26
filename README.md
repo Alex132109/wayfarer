@@ -71,8 +71,9 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 - [ ] Generate 2–3 itinerary variants ("Relaxed" vs "Packed")
 - [ ] Add hotels & food recommendations per itinerary
 
-### Week 4 — Web App & Deploy
-- [ ] Build the UI in Streamlit (`app/app.py`)
+### Week 4 — Web App & Deploy ✅ APP DONE
+- [x] Build the UI in Streamlit (`app/app.py`) — country picker, interests OR own stops,
+      start/end + days → route table with km per leg, day-wise stays, map, warnings
 - [ ] Deploy free on **Streamlit Community Cloud** or **Hugging Face Spaces**
 - [ ] Write a short project report / LinkedIn post with screenshots
 
@@ -99,7 +100,7 @@ wayfarer/
 │   ├── router.py              ← route optimizer: greedy + 2-opt + round trips (✅)
 │   └── itinerary.py           ← trip planner brain: corridor filter, days & stays (✅)
 └── app/
-    └── app.py                 ← Streamlit web app (Week 4)
+    └── app.py                 ← Streamlit web app (✅ done)
 ```
 
 ---
@@ -118,6 +119,9 @@ pip install -r requirements.txt
 
 # 3. Test the data pipeline with the sample dataset
 python src\data_loader.py
+
+# 4. Launch the website! 🌐
+.venv\Scripts\streamlit run app\app.py
 ```
 
 If that prints a nice table of Indian destinations — you're ready. 🎉
