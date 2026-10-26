@@ -1,6 +1,11 @@
 # 🧭 Wayfarer
 
-**AI-powered trip planner for India.**
+![Python](https://img.shields.io/badge/python-3.14-blue)
+![Tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)
+![ML](https://img.shields.io/badge/ML-TF--IDF%20%2B%20hybrid%20scoring-orange)
+![Roads](https://img.shields.io/badge/distances-real%20road%20km%20(OSRM)-9cf)
+
+**AI-powered trip planner — India first, then the world.**
 Tell Wayfarer *where*, *how many days*, *your budget* and *your vibe* — it plans 2–3 optimized
 day-wise itineraries with recommended hotels, food and places, so you travel the smart way.
 
@@ -122,7 +127,10 @@ wayfarer/
 │   ├── trip_money.py          ← budget engine: trip styles, meal caps, emergency fund (✅)
 │   ├── food_recommender.py    ← food + hotel recommenders — second ML model (✅)
 │   ├── daily_guide.py         ← daily guide builder: phobia filters, essentials (✅)
-│   └── trip_plan.py           ← editable TripPlan: edit anything → recompute (✅)
+│   ├── trip_plan.py           ← editable TripPlan: edit anything → recompute (✅)
+│   └── exports.py             ← Google Maps route, ICS calendar, offline HTML (✅)
+├── tests/
+│   └── test_wayfarer.py       ← pytest suite, 18 tests, offline-deterministic (✅)
 └── app/
     └── app.py                 ← Streamlit web app (✅ done)
 ```
@@ -152,6 +160,9 @@ python src\data_loader.py
 .venv\Scripts\python src\food_recommender.py # food + hotel recommenders
 .venv\Scripts\python src\daily_guide.py      # daily guide builder
 .venv\Scripts\python src\trip_plan.py        # editable TripPlan (the full demo!)
+
+# 6. Run the test suite
+.venv\Scripts\python -m pytest tests -q      # 18 tests, no network needed
 ```
 
 If that prints a nice table of Indian destinations — you're ready. 🎉

@@ -22,7 +22,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.data_loader import clean_places, find_data_file, load_places
+from src.daily_guide import build_daily_guide, essentials_list
+from src.exports import google_maps_url, ics_calendar, save_trip_html
+from src.food_recommender import HotelRecommender, load_side
 from src.itinerary import LONG_DRIVE_KM, TripPlanner
+from src.trip_money import estimate_budget
 
 st.set_page_config(page_title="Wayfarer — AI Trip Planner", page_icon="🧭", layout="wide")
 
@@ -156,6 +160,37 @@ def _num(val) -> float | None:
     return f if pd.notna(f) else None
 
 
+def money_html(money: dict) -> str:
+    """Budget as metric cards — reuses the same .mcard design system."""
+    label = money["label"]
+    cards = [
+        ("💰", f"₹{money['trip_pp']:,}", "TRIP / PERSON"),
+        ("🆘", f"₹{money['emergency_pp']:,}", "EMERGENCY FUND PP"),
+        ("👥", f"₹{money['trip_group'] + money['emergency_group']:,}", "GROUP (+FUND)"),
+        (label.split()[0], label.split(maxsplit=1)[1], "TRIP STYLE"),
+    ]
+    body = "".join(
+        f'<div class="mcard"><div class="ico">{ico}</div>'
+        f'<div class="val">{html.escape(val)}</div><div class="lab">{lab}</div></div>'
+        for ico, val, lab in cards
+    )
+    return f'<div class="metrics">{body}</div>'
+
+
+def render_guide(days_out: list) -> None:
+    """The ⭐ daily guide: time-boxed + budget-boxed schedule cards."""
+    for d in days_out:
+        with st.container(border=True):
+            st.markdown(f"**Day {d['day']} — {d['town']}**  ·  📦 box: ~{d['hours']:.0f}h of sights")
+            for i in d["items"]:
+                line = f"`{i['time']}` {i['label']}"
+                if i.get("max_time"):
+                    line += f" · ⏱ {i['max_time']} (beyond this, next item gets skipped)"
+                if i.get("try"):
+                    line += f" · try: **{i['try']}**"
+                st.markdown(line)
+
+
 # ---------------------------------------------------------------- #
 #  Renderers (styled HTML)                                         #
 # ---------------------------------------------------------------- #
@@ -196,29 +231,6 @@ def journey_html(route_df: pd.DataFrame) -> str:
     return '<div class="journey">' + "".join(rows) + "</div>"
 
 
-def render_day_cards(stay_plan: list, cityof: dict) -> None:
-    day = 1
-    for seg in stay_plan:
-        label = f"DAY {day}" if seg["days"] == 1 else f"DAY {day}–{day + seg['days'] - 1}"
-        day += seg["days"]
-        place = seg["place"]
-        town = seg.get("stay_town") or cityof.get(place, place)
-        subs = []
-        if seg.get("en_route"):
-            subs.append("🚶 en-route: " + ", ".join(short(x, 38) for x in seg["en_route"]))
-        warn = ""
-        if seg.get("drive_km", 0) > LONG_DRIVE_KM:
-            line = f"🚗 long drive ~{seg['drive_km']:,.0f} km — add buffer day(s)!"
-            subs.append(line)
-            warn = " warn"
-        sub_html = "".join(f'<div class="sub{warn if "🚗" in s else ""}">{html.escape(s)}</div>' for s in subs)
-        st.markdown(
-            f'<div class="day"><div class="daychip">{label}</div>'
-            f'<div class="daybody"><b>{html.escape(short(place, 70))}</b> · 🏨 stay: <b>{html.escape(town)}</b>{sub_html}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-
 # ---------------------------------------------------------------- #
 #  Page                                                            #
 # ---------------------------------------------------------------- #
@@ -248,6 +260,17 @@ with st.sidebar:
 
     days = st.number_input("📅 Trip length (days)", 1, 30, 5)
 
+    # Phase 1 ML inputs — money, styles, transport, diet, phobias
+    travellers = st.number_input("👥 Travellers", 1, 20, 2)
+    style = st.selectbox("💎 Trip style",
+                         ["budget", "economy", "comfort", "premium", "luxury", "super-luxury"], 2)
+    mode = st.selectbox("🛺 Transport mode",
+                        ["mixed", "car", "cab", "bike", "bus", "train", "flight"], 0)
+    month = st.text_input("🗓️ Travel month (season-aware picks)", "Oct")
+    diet = st.selectbox("🥗 Diet for food picks",
+                        ["No preference", "Veg", "Vegan", "Eggetarian", "NonVeg"], 0)
+    phobias = st.multiselect("😨 Phobia filters", ["heights", "dark", "water", "crowds"])
+
     interests, stops = [], []
     if mode.startswith("🎯"):
         tokens = set()
@@ -270,7 +293,8 @@ if st.button("Plan my trip 🧭", type="primary"):
         try:
             if mode.startswith("🎯"):
                 route_df, total_km, stay_plan = planner.plan(
-                    origin, destination, interests, n_places=n_places, days=int(days))
+                    origin, destination, interests, n_places=n_places,
+                    days=int(days), month=month or None)
             else:
                 route_df, total_km, stay_plan = planner.plan_explicit(
                     origin, destination, stops, days=int(days))
@@ -309,13 +333,63 @@ if plan and plan["key"] == key:
     st.subheader("🗺️ Your route, stop by stop")
     st.markdown(journey_html(route_df), unsafe_allow_html=True)
 
+    # --- 💰 budget (styles + emergency fund) ----------------------- #
+    money = estimate_budget(int(plan["days"]), int(travellers), float(total_km),
+                            mode=mode, style=style)
+    st.markdown(money_html(money), unsafe_allow_html=True)
+
+    # --- ⭐ daily guide (supersedes plain day cards) ---------------- #
     if stay_plan:
-        st.subheader("📅 Day-wise plan with stays")
-        render_day_cards(stay_plan, cityof)
+        foods = load_side("food", key)
+        guide = build_daily_guide(
+            planner.places, route_df, stay_plan, money,
+            foods=foods, diet=None if diet == "No preference" else diet,
+            phobias=phobias or None)
+        st.subheader("⭐ Daily guide — time & budget boxed")
+        render_guide(guide)
+
         if is_round:
             ret = _num(route_df.iloc[-2]["km_to_next"]) or 0.0
             if ret > LONG_DRIVE_KM:
                 st.warning(f"🚗 Return drive ≈ {ret:,.0f} km — add buffer days or consider flying back!")
+
+        # --- 🏨 hotel picks near each stay town --------------------- #
+        hotels = load_side("hotels", key)
+        if hotels is not None and not hotels.empty:
+            hr = HotelRecommender().fit(hotels)
+            towns = []
+            for d in guide:
+                if d["town"] not in towns:
+                    towns.append(d["town"])
+            per_night = money["stays"]["pp"] / max(money["stays"]["nights"], 1)
+            st.subheader("🏨 Stay picks (budget-fit + one upgrade)")
+            for t in towns:
+                picks = hr.recommend(t, budget_pp_night=per_night, travellers=int(travellers))
+                if not picks.empty:
+                    with st.expander(f"🏨 {t} — room budget ≈ ₹{per_night * 2:,.0f} / night"):
+                        for _, h in picks.iterrows():
+                            st.markdown(f"**{h['name']}** · {h['style']} · "
+                                        f"₹{h['price_per_night_inr']:,}/night · ⭐ {h['rating']}"
+                                        f" — {h['notes']}")
+
+        # --- 📤 take the plan with you ------------------------------ #
+        st.subheader("📤 Take your plan with you")
+        c1, c2, c3 = st.columns(3)
+        c1.link_button("🗺️ Open route in Google Maps",
+                       google_maps_url(route_df, planner.places))
+        c2.download_button("📅 Download .ics calendar",
+                           ics_calendar(stay_plan), "wayfarer_trip.ics", "text/calendar")
+        inputs = {"origin": origin, "destination": destination,
+                  "days": int(days), "travellers": int(travellers)}
+        html_path = ROOT / "exports" / "wayfarer_trip.html"
+        html_path.parent.mkdir(parents=True, exist_ok=True)
+        save_trip_html({"route_df": route_df, "total_km": total_km, "money": money,
+                        "guide": guide, "essentials": essentials_list(
+                            is_international=key in ("world", "japan"),
+                            trip_days=int(days))}, inputs, html_path)
+        c3.download_button("🖨️ Offline HTML itinerary",
+                           html_path.read_text(encoding="utf-8"),
+                           "wayfarer_itinerary.html", "text/html")
 
     with st.expander("🗂️ View raw data table"):
         st.dataframe(route_df, use_container_width=True, hide_index=True)
