@@ -1,7 +1,7 @@
 # 🧭 Wayfarer
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
-![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen)
 ![ML](https://img.shields.io/badge/ML-TF--IDF%20%2B%20hybrid%20scoring-orange)
 ![Roads](https://img.shields.io/badge/distances-real%20road%20km%20(OSRM)-9cf)
 
@@ -97,6 +97,39 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 - [x] Editable `TripPlan` — pass `stops` or `interests`; edit anything
       (`style`, `days`, `travellers`, `diet`, `skip_places`) → everything recomputes
       (`src/trip_plan.py`)
+- [x] Real road km via **OSRM** — one free API call per trip, disk-cached,
+      graceful offline fallback (`src/data_loader.py`)
+- [x] **Hybrid recommender** scoring — interests 55% + rating 20% + in-season 15%
+      + road-proximity 10% (`HYBRID_WEIGHTS` in `src/itinerary.py`)
+- [x] Exports — Google Maps route link, .ics calendar, offline printable
+      HTML itinerary (`src/exports.py`)
+
+### Phase 2 — "Accounts & Squads" ✅ BUILT (demo-mode)
+- [x] User database — sign-up/login with salted-hashed passwords, trip history
+      (`src/accounts.py`, SQLite in `data/wayfarer.db` — gitignored)
+- [x] Groups with invite codes — solo · duo · squads; join like WhatsApp
+      (`src/squads.py`)
+- [x] **Group payments, both ways** — admin pays 25k×5 = ₹1,25,000 once,
+      OR all 5 pay ₹25,000 each in-site (`split_payment` + demo capture)
+- [x] Splitwise-style expense tracker — add expenses, net balances per member
+- [x] Leaderboard per destination — scoring model: execution 60% +
+      under-budget 40% (seed data, `src/companion.py`)
+
+### Phase 3 — "Travel Companion + Commerce" ✅ BUILT (demo-mode)
+- [x] Language crash course packs + mini quiz (Japan 🇯🇵, India 🇮🇳)
+- [x] Battery buddy — <20% → "don't wander alone, buddy rule" alerts
+- [x] Location share — simulated snapshot (real GPS needs Phase 5 infra)
+- [x] SOS cards — police/ambulance/tourist helpline per destination
+- [x] Demo payments — Razorpay-shaped flow: `create_order` → `capture`
+      (test mode, amounts in paise, double-capture blocked) (`src/commerce.py`)
+- [x] Hotel bookings with confirmation codes (test mode)
+- [x] eSIM store — plans per destination with demo purchase
+- [x] Cab recommender — cheapest vehicle that fits the group + long-day flags
+
+> ⚠️ **Demo-mode honesty:** payments/bookings/eSIM purchases are simulated
+> test-mode flows (no real money, no real compliance). Live GPS needs phone
+> infra. Weather day-cards need your free OpenWeather key. Everything else runs
+> for real, offline, today.
 
 ---
 
@@ -128,9 +161,13 @@ wayfarer/
 │   ├── food_recommender.py    ← food + hotel recommenders — second ML model (✅)
 │   ├── daily_guide.py         ← daily guide builder: phobia filters, essentials (✅)
 │   ├── trip_plan.py           ← editable TripPlan: edit anything → recompute (✅)
-│   └── exports.py             ← Google Maps route, ICS calendar, offline HTML (✅)
+│   ├── exports.py             ← Google Maps route, ICS calendar, offline HTML (✅)
+│   ├── accounts.py            ← user DB: signup/login (salted SHA-256), trip history (✅)
+│   ├── squads.py              ← groups, invite codes, 25k×5 payments, Splitwise (✅)
+│   ├── companion.py           ← leaderboard, language packs, battery buddy, SOS (✅)
+│   └── commerce.py            ← demo payments, bookings, eSIM store, cabs (✅)
 ├── tests/
-│   └── test_wayfarer.py       ← pytest suite, 18 tests, offline-deterministic (✅)
+│   └── test_wayfarer.py       ← pytest suite, 27 tests incl. end-to-end site test (✅)
 └── app/
     └── app.py                 ← Streamlit web app (✅ done)
 ```
@@ -155,14 +192,18 @@ python src\data_loader.py
 # 4. Launch the website! 🌐
 .venv\Scripts\streamlit run app\app.py
 
-# 5. Phase 1 ML modules (each is runnable + self-checking)
+# 5. Phase 1–3 ML modules (each is runnable + self-checking)
 .venv\Scripts\python src\trip_money.py       # budget engine + trip style tiers
 .venv\Scripts\python src\food_recommender.py # food + hotel recommenders
 .venv\Scripts\python src\daily_guide.py      # daily guide builder
 .venv\Scripts\python src\trip_plan.py        # editable TripPlan (the full demo!)
+.venv\Scripts\python src\accounts.py         # signup/login + trip history (demo DB)
+.venv\Scripts\python src\squads.py           # squads + 25k×5 payments + Splitwise
+.venv\Scripts\python src\companion.py        # leaderboard, language packs, SOS
+.venv\Scripts\python src\commerce.py         # demo payments, bookings, eSIM, cabs
 
 # 6. Run the test suite
-.venv\Scripts\python -m pytest tests -q      # 18 tests, no network needed
+.venv\Scripts\python -m pytest tests -q      # 27 tests, no network needed
 ```
 
 If that prints a nice table of Indian destinations — you're ready. 🎉

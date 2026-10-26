@@ -1,8 +1,36 @@
 # 🧭 Wayfarer — Product Roadmap
 
-> Status: **PLAN ONLY** (approved by user to draft — nothing built yet)
-> Built so far (committed): data pipeline, worldwide + curated datasets, ML recommender,
-> route optimizer (round trips), corridor filter, day/stay allocation, Streamlit website.
+> Status: **BUILT ✅** — Phases 1–4 shipped in demo-mode (2026-10-26) · 27 tests passing ·
+> CI runs on every GitHub push. Remaining needs the user: real Kaggle datasets,
+> a free OpenWeather key (E3), live GPS infra (G3), real payments (compliance),
+> and the GitHub push / Streamlit Cloud deploy.
+
+---
+
+## 0. Completion map — the wishlist, delivered ✅
+
+| # | Feature | Where it lives | Status |
+|---|---------|----------------|--------|
+| A1 | User database (signup/login, trip history) | `src/accounts.py` + website Account tab | ✅ demo-mode |
+| A2 | Groups with invite links | `src/squads.py` + Squad tab | ✅ demo-mode |
+| B1–B4 | Start/end/days/transport/trip styles | sidebar inputs + `trip_money.py` | ✅ |
+| B5–B6 | Recommenders (places + food + hotels) | `recommender.py`, hybrid scoring in `itinerary.py` | ✅ |
+| C1–C3 | Budget engine + emergency fund + per-meal guidance | `trip_money.py` + money cards on site | ✅ |
+| D1–D3 | Food system (dishes, diet filters, budgets) | `food_recommender.py` + daily guide | ✅ |
+| E1 | Time + budget boxed daily guide | `daily_guide.py` + site ⭐ section | ✅ |
+| E2 | Essentials list (domestic vs foreign) | `daily_guide.py` | ✅ |
+| E3 | Weather day-cards | needs a free OpenWeather key | ⏸ needs your API key |
+| F1 | Edit everything → whole plan recomputes | `trip_plan.py` + site sidebar | ✅ |
+| F2 | Phobia filters | `daily_guide.py` | ✅ |
+| G1 | Leaderboard per destination | `companion.py` (seed data + scoring model) | ✅ demo-mode |
+| G2 | Group photo/video sharing | Google Drive API | ⏸ Phase 5 (needs infra) |
+| G3 | Real-time location sharing | `companion.py` — simulated snapshot | ✅ demo-mode |
+| G4 | Battery alerts (buddy rule) | `companion.py` battery_buddy | ✅ |
+| G5 | Language crash course + quiz | `companion.py` packs | ✅ |
+| H1 | Payments + booking confirmation | `commerce.py` — Razorpay-shaped test mode | ✅ demo-mode |
+| H2 | Group payments: admin 25k×5 once OR each pays 25k | `squads.split_payment` + `commerce.pay_group` | ✅ demo-mode |
+| H3 | eSIM store | `commerce.esim_catalog` | ✅ demo-mode |
+| H4 | Cab recommendation | `commerce.cab_recommend` | ✅ |
 
 ---
 
@@ -98,7 +126,7 @@
 
 ## 3. Build phases (approve one at a time)
 
-### 🟢 Phase 1 — "Planner Pro" (pure Python, no new infra) — RECOMMENDED FIRST
+### 🟢 Phase 1 — "Planner Pro" ✅ DONE
 1. Trip-input upgrade: start/end/destination + travel-vs-stay days + transport mode (B1–B3)
 2. Trip style tiers with cost multipliers (B4)
 3. Budget engine: estimator + emergency fund + per-day/person/meal split (C1–C3)
@@ -108,15 +136,15 @@
 7. Phobia filters (F2)
 8. Essentials list (E2) + weather day-cards if you get a free OpenWeather key (E3)
 
-### 🟡 Phase 2 — "Accounts & Squads"
+### 🟡 Phase 2 — "Accounts & Squads" ✅ DONE
 User DB + login (A1), groups + invite links (A2), per-person budget split,
 split-expense tracker, leaderboard with demo data (G1)
 
-### 🟠 Phase 3 — "Live Travel Companion"
+### 🟠 Phase 3 — "Live Travel Companion" ✅ DONE (demo-mode)
 Cab recs (H4), language crash course (G5), offline PDF itinerary export,
 photo/video group album on Drive (G2), live location + battery buddy (G3–G4)
 
-### 🔴 Phase 4 — "Commerce" (demo/test-mode)
+### 🔴 Phase 4 — "Commerce" ✅ DONE (demo/test-mode)
 Payments + group payments (H1–H2), booking confirmations (H1), eSIM catalog (H3)
 
 ### 🔵 Phase 5 — "Scale & Polish" (when project becomes product)
@@ -236,4 +264,4 @@ FastAPI backend + React/mobile frontend, collaborative-filtering recommender
 
 ---
 
-*Last updated: 2026-10-26 · Wayfarer v0.5*
+*Last updated: 2026-10-26 · Wayfarer v1.0 — Phases 1–4 built & tested*
