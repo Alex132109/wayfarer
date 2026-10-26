@@ -30,19 +30,32 @@ import pandas as pd
 
 
 class RouteOptimizer:
-    """Orders a set of places between a fixed origin and destination."""
+    """Orders a set of places between a fixed origin and destination.
 
-    def __init__(self, places: pd.DataFrame):
+    road_matrix (optional): a name×name km DataFrame of REAL road distances
+    (from OSRM). When given, every distance lookup uses road km and only
+    falls back to straight-line for names outside the matrix. Create a FRESH
+    RouteOptimizer per trip (see TripPlanner._fresh_router) — a shared
+    instance would leak one trip's matrix into the next (the classic bug).
+    """
+
+    def __init__(self, places: pd.DataFrame, road_matrix: pd.DataFrame | None = None):
         self.places = places.reset_index(drop=True)
         self.names = self.places["name"].astype(str).tolist()
         self._lat = self.places["lat"].to_numpy(dtype=float)
         self._lon = self.places["lon"].to_numpy(dtype=float)
+        self.matrix = road_matrix
 
     # ------------------------------------------------------------ #
     #  Helpers                                                     #
     # ------------------------------------------------------------ #
     def _km(self, i: int, j: int) -> float:
-        """Straight-line km between place index i and j (computed on demand)."""
+        """km between place index i and j — road km when available,
+        straight-line (haversine) otherwise. Computed on demand."""
+        if self.matrix is not None:
+            a, b = self.names[i], self.names[j]
+            if a in self.matrix.index and b in self.matrix.columns:
+                return float(self.matrix.loc[a, b])
         return haversine_km(self._lat[i], self._lon[i], self._lat[j], self._lon[j])
 
     def find_place(self, query: str) -> int:

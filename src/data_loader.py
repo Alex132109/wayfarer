@@ -22,6 +22,90 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"      # your real Kaggle datasets go here
 SAMPLE_DIR = ROOT / "data" / "sample"  # starter dataset (runs out of the box)
 
+# ---------------------------------------------------------------- #
+#  REAL ROAD KM (OSRM) — the 10× accuracy upgrade 🛣️                #
+# ---------------------------------------------------------------- #
+# Straight-line km UNDER-estimates by 20–30%. The free OSRM demo server
+# gives TRUE road distances. Design decisions (learn these!):
+#   • ONE request per trip: the /table endpoint returns the whole N×N
+#     matrix at once — no request-per-pair spamming.
+#   • DISK CACHE: every matrix is saved, so re-plans are instant and we
+#     never re-ask the network for the same trip.
+#   • GRACEFUL FALLBACK: any network problem → None → the router quietly
+#     uses straight-line estimates. The app NEVER crashes on the network.
+import hashlib
+import json as _json
+import ssl
+import urllib.request
+
+OSRM_URL = "https://router.project-osrm.org"
+CACHE_DIR = ROOT / "data" / "cache"
+
+
+def road_distance_matrix(df: pd.DataFrame, timeout: int = 20) -> pd.DataFrame | None:
+    """
+    Real road km between all places in `df` (one HTTP call).
+    Returns a DataFrame of km (row → column), or None if offline/failed.
+    """
+    n = len(df)
+    if n < 2:
+        return None
+    names = df["name"].astype(str).tolist()
+
+    # 1. disk cache — keyed by the exact set of place names
+    key = hashlib.md5("|".join(sorted(names)).encode()).hexdigest()
+    cache_file = CACHE_DIR / f"osrm_{key}.json"
+    if cache_file.exists():
+        try:
+            cached = _json.loads(cache_file.read_text())
+            if set(cached["names"]) == set(names):
+                m = cached["meters"]
+                return pd.DataFrame([[v / 1000.0 for v in row] for row in m],
+                                    index=names, columns=names)
+        except Exception:
+            pass  # corrupt cache → just refetch
+
+    # 2. build the request (OSRM wants lon,lat order!)
+    coords = ";".join(f"{float(r['lon']):.6f},{float(r['lat']):.6f}"
+                      for _, r in df.iterrows())
+    url = f"{OSRM_URL}/table/v1/driving/{coords}?annotations=distance"
+    req = urllib.request.Request(url, headers={"User-Agent": "Wayfarer/1.0 (student project)"})
+
+    # 3. verified SSL first — same proxy-friendly fallback as the UNESCO loader
+    raw = None
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except Exception as e:
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                raw = resp.read()
+        except Exception as e2:
+            print(f"⚠️  OSRM road data unavailable ({e2.__class__.__name__}) — "
+                  f"using straight-line × 1.25 estimates instead")
+            return None
+
+    # 4. validate → km DataFrame → cache
+    try:
+        data = _json.loads(raw)
+        m = data.get("distances")
+        complete = m and len(m) == n and all(v is not None for row in m for v in row)
+        if not complete:
+            print("⚠️  OSRM returned incomplete road data — using straight-line fallback")
+            return None
+    except Exception:
+        print("⚠️  Could not parse OSRM response — using straight-line fallback")
+        return None
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(_json.dumps({"names": names, "meters": m}))
+    print(f"🛣️  REAL road km loaded via OSRM for {n} places (cached for next time)")
+    return pd.DataFrame([[v / 1000.0 for v in row] for row in m],
+                        index=names, columns=names)
+
 
 # ---------------------------------------------------------------- #
 #  1. LOADING                                                      #

@@ -36,15 +36,19 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 try:
-    from src.data_loader import clean_places, find_data_file, load_places
+    from src.data_loader import clean_places, find_data_file, load_places, road_distance_matrix
     from src.recommender import PlaceRecommender
     from src.router import RouteOptimizer
 except ImportError:  # running directly: python src\itinerary.py
-    from data_loader import clean_places, find_data_file, load_places
+    from data_loader import clean_places, find_data_file, load_places, road_distance_matrix
     from recommender import PlaceRecommender
     from router import RouteOptimizer
 
 LONG_DRIVE_KM = 450  # legs longer than this get a "long drive" warning
+
+# HYBRID RECOMMENDER WEIGHTS (feature engineering — the 15/10 upgrade):
+#   score = w1·interest-match + w2·rating + w3·in-season + w4·proximity
+HYBRID_WEIGHTS = {"interest": 0.55, "rating": 0.20, "season": 0.15, "proximity": 0.10}
 
 
 class TripPlanner:
@@ -53,8 +57,19 @@ class TripPlanner:
     def __init__(self, places):
         self.places = places.reset_index(drop=True)
         self.rec = PlaceRecommender().fit(self.places)
-        self.router = RouteOptimizer(self.places)
+        self.router = RouteOptimizer(self.places)   # default: straight-line km
         self._suggested = self._load_suggested_days()
+
+    def _fresh_router(self, node_names) -> tuple[RouteOptimizer, bool]:
+        """
+        Build a per-trip RouteOptimizer. When the network allows, it carries a
+        REAL road-km matrix (OSRM) for exactly the trip's places; otherwise it
+        quietly falls back to straight-line. Fresh instance = zero leaks.
+        Returns (router, used_road_km).
+        """
+        nodes = self.places[self.places["name"].astype(str).isin(set(node_names))]
+        road = road_distance_matrix(nodes) if len(nodes) >= 2 else None
+        return RouteOptimizer(self.places, road_matrix=road), road is not None
 
     def _load_suggested_days(self) -> dict:
         """name → suggested days (curated column), else {} (chunk mode)."""
@@ -66,29 +81,34 @@ class TripPlanner:
     # ------------------------------------------------------------ #
     #  Mode 1 — interest-based planning                            #
     # ------------------------------------------------------------ #
-    def plan(self, origin, destination, interests, n_places=5, days=0, max_extra_ratio=0.6):
+    def plan(self, origin, destination, interests, n_places=5, days=0,
+             max_extra_ratio=0.6, month=None):
         """
         Pick places by interests, keep only sensible ones, order them, split days.
 
         max_extra_ratio: a candidate is dropped if visiting it adds MORE than
             (ratio × direct km) — e.g. 0.6 = the place may add up to ~60% extra
             travel compared to going straight origin → destination.
+        month:      optional travel month ("Oct") — powers the in-season signal.
         """
-        o = self.router.find_place(origin)
-        d = self.router.find_place(destination)
-        direct_km = self.router._km(o, d)
-
         # 1. Which places match the user's vibe? (recommender)
         pool = self.rec.recommend(interests, top_n=n_places + 4).copy()
         if pool.empty:
             raise ValueError("No matching places found for those interests.")
 
-        # 2. CORRIDOR FILTER — a far-off candidate (e.g. Mumbai on a Delhi→Agra
-        #    trip) forces a huge detour. Measure the extra km each one adds:
-        #        extra = km(origin→place) + km(place→dest) − km(origin→dest)
+        # 2. Per-trip router — REAL road km (OSRM) when the network allows,
+        #    otherwise straight-line. One fresh instance per trip = no leaks.
+        nodes = {str(origin), str(destination)} | set(pool["name"].astype(str))
+        router, road = self._fresh_router(list(nodes))
+        o, d = router.find_place(origin), router.find_place(destination)
+        direct_km = router._km(o, d)
+
+        # 2b. CORRIDOR FILTER — a far-off candidate (e.g. Mumbai on a Delhi→Agra
+        #     trip) forces a huge detour. Measure the extra km each one adds:
+        #         extra = km(origin→place) + km(place→dest) − km(origin→dest)
         def detour_km(name: str) -> float:
-            i = self.router.find_place(name)
-            return self.router._km(o, i) + self.router._km(i, d) - direct_km
+            i = router.find_place(name)
+            return router._km(o, i) + router._km(i, d) - direct_km
 
         pool["extra_km"] = pool["name"].map(detour_km)
         before = len(pool)
@@ -111,8 +131,26 @@ class TripPlanner:
         if dropped > 0:
             print(f"✂️  Dropped {dropped} place(s) far off the {origin} → {destination} corridor")
 
-        # 3. Order them (router — greedy + 2-opt) and split into days
-        route_df, total_km = self.router.build_route(origin, destination, pool["name"].tolist())
+        # 2c. HYBRID SCORING — blend FOUR signals into one final score
+        #     (feature engineering: this is how recommenders grow up)
+        w = HYBRID_WEIGHTS
+        rating = pd.to_numeric(pool["rating"], errors="coerce").fillna(4.0) / 5.0
+        if month:
+            season = pool["best_time"].fillna("").astype(str).str.contains(
+                str(month), case=False).astype(float)
+        else:
+            season = pd.Series(0.5, index=pool.index)   # unknown month → neutral
+        proximity = (1 - pool["extra_km"].clip(lower=0) / max(direct_km, 1)).clip(0, 1)
+        pool["final_score"] = (w["interest"] * pool["match_score"]
+                               + w["rating"] * rating
+                               + w["season"] * season
+                               + w["proximity"] * proximity)
+        pool = pool.sort_values("final_score", ascending=False).head(n_places)
+        print(f"🧠 Hybrid pick: interests {w['interest']:.0%} · rating {w['rating']:.0%}"
+              f" · in-season {w['season']:.0%} · road-proximity {w['proximity']:.0%}")
+
+        # 3. Order them (same road-aware router — greedy + 2-opt) and split days
+        route_df, total_km = router.build_route(origin, destination, pool["name"].tolist())
         stay_plan = self._split_days(route_df, days, origin, destination) if days and days > 0 else None
         return route_df, total_km, stay_plan
 
@@ -122,7 +160,9 @@ class TripPlanner:
     def plan_explicit(self, origin, destination, stops, days=0):
         """Route EXACTLY the stops the user listed (order optimized for them).
         Round trips work: origin == destination (e.g. Berhampur → Berhampur)."""
-        route_df, total_km = self.router.build_route(origin, destination, list(stops))
+        nodes = {str(origin), str(destination)} | {str(s) for s in stops}
+        router, road = self._fresh_router(list(nodes))
+        route_df, total_km = router.build_route(origin, destination, list(stops))
         stay_plan = self._split_days(route_df, days, origin, destination) if days and days > 0 else None
         return route_df, total_km, stay_plan
 
