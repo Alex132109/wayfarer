@@ -68,14 +68,14 @@ def api_key() -> str | None:
 # ---------------------------------------------------------------- #
 #  Current weather — one call per town                                #
 # ---------------------------------------------------------------- #
-def current(lat: float, lon: float) -> dict | None:
+def current(lat: float, lon: float, timeout: int = 20) -> dict | None:
     """Temp °C, feels-like, condition, rain chance %, wind km/h."""
     key = api_key()
     if key is None:
         return None
     url = (f"{API}/weather?lat={lat:.4f}&lon={lon:.4f}"
            f"&units=metric&appid={urllib.parse.quote(key)}")
-    data = _fetch_json(url)
+    data = _fetch_json(url, timeout=timeout)
     if not data or "main" not in data:
         return None
     w = (data.get("weather") or [{}])[0]
@@ -93,14 +93,15 @@ def current(lat: float, lon: float) -> dict | None:
 # ---------------------------------------------------------------- #
 #  Daily forecast — aggregate 3-hourly rows per day                   #
 # ---------------------------------------------------------------- #
-def forecast_daily(lat: float, lon: float, days: int = 5) -> pd.DataFrame | None:
+def forecast_daily(lat: float, lon: float, days: int = 5, timeout: int = 20
+                   ) -> pd.DataFrame | None:
     """Free forecast = 40 × 3-hourly entries → min/max temp + rain per day."""
     key = api_key()
     if key is None:
         return None
     url = (f"{API}/forecast?lat={lat:.4f}&lon={lon:.4f}"
            f"&units=metric&appid={urllib.parse.quote(key)}")
-    data = _fetch_json(url)
+    data = _fetch_json(url, timeout=timeout)
     if not data or "list" not in data:
         return None
     rows: dict[str, dict] = {}
@@ -147,14 +148,14 @@ def day_essentials(temp_c: float, rain_chance_pct: int, condition: str = "") -> 
     return items
 
 
-def trip_weather(towns: list[dict]) -> pd.DataFrame | None:
+def trip_weather(towns: list[dict], timeout: int = 20) -> pd.DataFrame | None:
     """
     towns = [{"town": name, "lat": .., "lon": ..}, ...]  (stay towns).
     One row per town: current weather + what to carry for those conditions.
     """
     rows = []
     for t in towns:
-        c = current(t["lat"], t["lon"])
+        c = current(t["lat"], t["lon"], timeout=timeout)
         if c is None:
             return None                       # first failure → stay quiet entirely
         rows.append({"town": t["town"], **c,

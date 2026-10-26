@@ -1,7 +1,7 @@
 # 🧭 Wayfarer
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
-![Tests](https://img.shields.io/badge/tests-28%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen)
 ![ML](https://img.shields.io/badge/ML-TF--IDF%20%2B%20hybrid%20scoring-orange)
 ![Roads](https://img.shields.io/badge/distances-real%20road%20km%20(OSRM)-9cf)
 
@@ -56,8 +56,8 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 
 ### Week 1 — Foundations & Data ✅ *you are here*
 - [x] Project skeleton created
-- [ ] Create Kaggle account → download 1–2 India travel datasets (see **Datasets** below)
-- [ ] Put CSVs into `data/raw/`
+- [x] Create Kaggle account → download 1–2 India travel datasets (see **Datasets** below) — DONE, public datasets download keyless
+- [x] Put CSVs into `data/raw/` — `places_india.csv` (256 geocoded places) committed
 - [ ] Run `python src/data_loader.py` and explore the data
 - [ ] (Refresher) pandas basics: `read_csv`, filtering, `groupby`
 
@@ -128,8 +128,9 @@ day-wise itineraries with recommended hotels, food and places, so you travel the
 
 > ⚠️ **Demo-mode honesty:** payments/bookings/eSIM purchases are simulated
 > test-mode flows (no real money, no real compliance). Live GPS needs phone
-> infra. Weather day-cards need your free OpenWeather key. Everything else runs
-> for real, offline, today.
+> infra. Weather day-cards work with your free OpenWeather key (saved in the
+> gitignored `.streamlit/secrets.toml` — without it they stay quiet). Everything
+> else runs for real, offline, today.
 
 ---
 
@@ -220,7 +221,7 @@ If that prints a nice table of Indian destinations — you're ready. 🎉
 OpenStreetMap **Nominatim** API (results disk-cached forever in `data/cache/`):
 
 ```bash
-.venv\Scripts\python src\build_india_dataset.py   # needs ~/.kaggle/kaggle.json
+.venv\Scripts\python src\build_india_dataset.py   # public dataset → keyless (auth optional)
 ```
 
 The pipeline: **download → clean → enrich (geocode) → save** — and `find_data_file`
@@ -259,6 +260,46 @@ each with GPS coordinates** — is auto-downloaded and converted (no login neede
 ```
 
 → creates `data/raw/places_world_heritage.csv` (India alone has 44 sites in it!).
+
+### 🌏 EVERY city on Earth + REAL stays — the worldwide upgrade ✅
+
+Two more free sources complete the "tiny village to big capitals" wishlist:
+
+**1. GeoNames cities500** — **236,731 cities** (every settlement ≥500 people + admin
+capitals), with official *and* alternate names so humans can search the way they type
+(`"Bombay"` → Mumbai, `"Cherrapunji"` → Sohra, `"Reykjavik"` → Reykjavík):
+
+```bash
+.venv\Scripts\python src\build_world_cities.py   # ~1 min, no API key
+```
+
+→ creates `data/raw/cities_world.csv` (~30 MB — gitignored, regenerable in 1 minute).
+The site's **🌍 Any city on Earth** tab searches this database.
+
+**2. OpenStreetMap Overpass** — REAL **stays & sights** for ANY city, fetched
+on-demand when you explore it (hotels/guesthouses/hostels + attractions/historic
+landmarks). Each query is disk-cached forever (`data/cache/`), so repeats are instant:
+
+```python
+from src import osm_places
+osm_places.hotels_near(lat, lon, radius_km=25)   # → DataFrame of real mapped hotels
+```
+
+**3. LIVE hotel prices — the anti-frozen-price rule 🚫❄️:** hotel costs change BY DATE,
+so the site never shows a frozen price as the truth. Curated picks carry a *sample ₹*
+(budget estimate) plus deep links that open the platforms' own live search **with your
+check-in/check-out dates pre-filled** — one tap = the real current price & rating on
+Booking.com, Google Hotels (aggregates GoIbibo, MakeMyTrip, Expedia…) or GoIbibo:
+
+```python
+from src.exports import booking_links
+booking_links("Ri Kynjai", "Shillong", "2027-01-10", "2027-01-12")
+# → {"booking": "...checkin=2027-01-10&checkout=2027-01-12...", "google": ..., "goibibo": ...}
+```
+
+Why not scrape the platforms? They block scrapers (Cloudflare) and it breaks their
+ToS — deep links are the legit way to "scan" them live, and they serve your dates
+accurately by definition.
 
 > **⚠️ Important design lesson:** we do NOT precompute "km from every place to every other
 > place" — with 1,270 places that's 1.6 million pairs, and it grows as N². Instead we store

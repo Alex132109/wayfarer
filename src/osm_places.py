@@ -21,6 +21,7 @@ import hashlib
 import json
 import ssl
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -41,16 +42,26 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _fetch(query: str, timeout: int = 90) -> dict | None:
+def _fetch(query: str, timeout: int = 90, budget_s: int = 60) -> dict | None:
     """POST a query to Overpass → parsed JSON.
-    For each mirror: verified SSL first, proxy-friendly unverified fallback
-    (campus/corporate proxies often serve expired certs — never crash on it)."""
+
+    Two safety nets, learned the hard way:
+      • verified SSL first, proxy-friendly unverified fallback (campus/corporate
+        proxies often serve expired certs — never crash on it)
+      • a TOTAL time budget across all mirrors (deadline pattern): a
+        rate-limited public server must not freeze a UI click for minutes.
+    """
+    deadline = time.monotonic() + budget_s
     body = urllib.parse.urlencode({"data": query}).encode()
     for url in ENDPOINTS:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        t_out = min(timeout, max(int(remaining), 1))
         req = urllib.request.Request(url, data=body, headers={
             "User-Agent": "Wayfarer/1.0 (student project)"})
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=t_out) as resp:
                 return json.loads(resp.read())
         except Exception:
             pass
@@ -58,14 +69,15 @@ def _fetch(query: str, timeout: int = 90) -> dict | None:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         try:
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            with urllib.request.urlopen(req, timeout=t_out, context=ctx) as resp:
                 return json.loads(resp.read())
         except Exception:
             continue
     return None
 
 
-def _cached(kind: str, lat: float, lon: float, radius_m: int, limit: int):
+def _cached(kind: str, lat: float, lon: float, radius_m: int, limit: int,
+            timeout: int = 90, budget_s: int = 60):
     """Cache key = kind + location rounded to ~110 m (3 decimals)."""
     key = f"{kind}|{lat:.3f}|{lon:.3f}|{radius_m}|{limit}"
     cache_file = CACHE_DIR / f"osm_{hashlib.md5(key.encode()).hexdigest()}.json"
@@ -86,7 +98,7 @@ def _cached(kind: str, lat: float, lon: float, radius_m: int, limit: int):
              f'way["tourism"="attraction"](around:{radius_m},{lat:.6f},{lon:.6f});'
              f'way["historic"](around:{radius_m},{lat:.6f},{lon:.6f}););'
              f'out tags center {limit};')
-    data = _fetch(q)
+    data = _fetch(q, timeout=timeout, budget_s=budget_s)
     elements = (data or {}).get("elements")
     if elements is None:
         return None, "offline"
@@ -115,18 +127,22 @@ def _to_df(elements: list) -> pd.DataFrame:
 
 
 def hotels_near(lat: float, lon: float, radius_km: float = 15,
-                limit: int = 40) -> pd.DataFrame | None:
+                limit: int = 40, timeout: int = 90, budget_s: int = 60
+                ) -> pd.DataFrame | None:
     """REAL stays around a point. None = no network (feature stays quiet)."""
-    elements, _src = _cached("hotels", lat, lon, int(radius_km * 1000), limit)
+    elements, _src = _cached("hotels", lat, lon, int(radius_km * 1000), limit,
+                             timeout=timeout, budget_s=budget_s)
     if elements is None:
         return None
     return _to_df(elements)
 
 
 def sights_near(lat: float, lon: float, radius_km: float = 15,
-                limit: int = 40) -> pd.DataFrame | None:
+                limit: int = 40, timeout: int = 90, budget_s: int = 60
+                ) -> pd.DataFrame | None:
     """REAL sights (attractions + historic) around a point."""
-    elements, _src = _cached("sights", lat, lon, int(radius_km * 1000), limit)
+    elements, _src = _cached("sights", lat, lon, int(radius_km * 1000), limit,
+                             timeout=timeout, budget_s=budget_s)
     if elements is None:
         return None
     return _to_df(elements)

@@ -148,6 +148,32 @@ def save_trip_html(summary: dict, inputs: dict, path: Path) -> Path:
 
 
 # ---------------------------------------------------------------- #
+#  4. LIVE-PRICE LINKS — "scan Booking/GoIbibo" done honestly         #
+# ---------------------------------------------------------------- #
+def booking_links(hotel_name: str, city: str = "", checkin: str = "",
+                  checkout: str = "") -> dict[str, str]:
+    """
+    Hotel prices change BY DATE — so we NEVER freeze them. Instead we build
+    deep links to the platforms' own live search WITH the user's dates
+    pre-filled: one click = the real current price on Booking.com, or
+    Google Hotels (which aggregates GoIbibo, MakeMyTrip, Expedia…).
+
+    Why not scrape? Platforms block scrapers (Cloudflare) and it breaks
+    their ToS. Deep links = the legit way to 'scan' them live.
+    """
+    q = quote(f"{hotel_name} {city}".strip())
+    links = {
+        "google": f"https://www.google.com/travel/search?q={q}",
+        "goibibo": f"https://www.goibibo.com/search?q={q}",
+        "booking": (f"https://www.booking.com/searchresults.html?ss={q}"
+                    f"&checkin={checkin}&checkout={checkout}&no_rooms=1"
+                    if checkin and checkout else
+                    f"https://www.booking.com/searchresults.html?ss={q}"),
+    }
+    return links
+
+
+# ---------------------------------------------------------------- #
 #  Test drive                                                        #
 # ---------------------------------------------------------------- #
 if __name__ == "__main__":
@@ -184,5 +210,16 @@ if __name__ == "__main__":
     assert out.exists() and out.stat().st_size > 4000
     print(f"🖨️ Offline itinerary saved: {out.relative_to(ROOT)} "
           f"({out.stat().st_size / 1024:.1f} KB) — open it in any browser")
+
+    # 💰 live-price links — hotel prices change BY DATE, so we deep-link the
+    # platforms' own search with the user's dates pre-filled (never frozen).
+    bl = booking_links("Ri Kynjai", "Shillong", "2027-01-10", "2027-01-12")
+    assert bl["booking"].startswith("https://www.booking.com/searchresults.html")
+    assert "checkin=2027-01-10" in bl["booking"]
+    assert "checkout=2027-01-12" in bl["booking"]
+    assert bl["google"].startswith("https://www.google.com/travel/search?q=")
+    assert bl["goibibo"].startswith("https://www.goibibo.com/search?q=")
+    assert "checkin=" not in booking_links("Ri Kynjai")["booking"]   # no dates → plain search
+    print("💰 Booking/GoIbibo/Google links carry the user's dates → LIVE prices")
 
     print("\n🎉 ALL EXPORT TESTS PASSED")

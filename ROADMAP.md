@@ -1,9 +1,8 @@
 # 🧭 Wayfarer — Product Roadmap
 
-> Status: **BUILT ✅** — Phases 1–4 shipped in demo-mode (2026-10-26) · 27 tests passing ·
-> CI runs on every GitHub push. Remaining needs the user: real Kaggle datasets,
-> a free OpenWeather key (E3), live GPS infra (G3), real payments (compliance),
-> and the GitHub push / Streamlit Cloud deploy.
+> Status: **BUILT ✅** — Phases 1–4 shipped in demo-mode (2026-10-26) · 36 tests passing ·
+> CI runs on every GitHub push. Remaining needs the user: live GPS infra (G3),
+> real payments (compliance), and the one-click Streamlit Cloud deploy.
 
 ---
 
@@ -19,7 +18,7 @@
 | D1–D3 | Food system (dishes, diet filters, budgets) | `food_recommender.py` + daily guide | ✅ |
 | E1 | Time + budget boxed daily guide | `daily_guide.py` + site ⭐ section | ✅ |
 | E2 | Essentials list (domestic vs foreign) | `daily_guide.py` | ✅ |
-| E3 | Weather day-cards | needs a free OpenWeather key | ⏸ needs your API key |
+| E3 | Weather day-cards | `weather.py` + live weather blocks on site & explorer | ✅ LIVE (key in gitignored `.streamlit/secrets.toml`) |
 | F1 | Edit everything → whole plan recomputes | `trip_plan.py` + site sidebar | ✅ |
 | F2 | Phobia filters | `daily_guide.py` | ✅ |
 | G1 | Leaderboard per destination | `companion.py` (seed data + scoring model) | ✅ demo-mode |
@@ -27,10 +26,13 @@
 | G3 | Real-time location sharing | `companion.py` — simulated snapshot | ✅ demo-mode |
 | G4 | Battery alerts (buddy rule) | `companion.py` battery_buddy | ✅ |
 | G5 | Language crash course + quiz | `companion.py` packs | ✅ |
-| H1 | Payments + booking confirmation | `commerce.py` — Razorpay-shaped test mode | ✅ demo-mode |
+| H1 | Payments + booking confirmation | `commerce.py` — Razorpay-shaped test mode + LIVE-price deep links (`exports.booking_links`) | ✅ demo-mode |
 | H2 | Group payments: admin 25k×5 once OR each pays 25k | `squads.split_payment` + `commerce.pay_group` | ✅ demo-mode |
 | H3 | eSIM store | `commerce.esim_catalog` | ✅ demo-mode |
 | H4 | Cab recommendation | `commerce.cab_recommend` | ✅ |
+| W1 | Every city on Earth (villages → capitals) | GeoNames cities500 via `build_world_cities.py` — 236,731 cities, alt-name search | ✅ |
+| W2 | REAL worldwide stays & sights | `osm_places.py` — OpenStreetMap Overpass, on-demand + disk cache | ✅ |
+| W3 | LIVE hotel prices (never frozen) | `exports.booking_links` — Booking/GoIbibo/Google deep links with YOUR dates | ✅ |
 
 ---
 

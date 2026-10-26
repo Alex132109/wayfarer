@@ -12,8 +12,10 @@ Run it:
 
 import html
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -26,11 +28,12 @@ from src.companion import (LANGUAGE_PACKS, battery_buddy, language_quiz,
                            leaderboard, location_share, sos_card)
 from src.commerce import (ESIM_PLANS, book_hotel, buy_esim, cab_recommend,
                           esim_catalog, pay_group)
-from src.data_loader import clean_places, find_data_file, load_places
+from src.data_loader import clean_places, find_data_file, haversine_km, load_places
 from src.daily_guide import build_daily_guide, essentials_list
-from src.exports import google_maps_url, ics_calendar, save_trip_html
+from src.exports import booking_links, google_maps_url, ics_calendar, save_trip_html
 from src.food_recommender import HotelRecommender, load_side
 from src.itinerary import LONG_DRIVE_KM, TripPlanner
+from src import osm_places, weather
 from src.squads import (add_expense, balances, create_group, group_info,
                         join_group, members as squad_members, split_payment)
 from src.trip_money import estimate_budget
@@ -149,6 +152,15 @@ def get_places(key: str):
 @st.cache_resource(show_spinner=False)
 def get_planner(key: str):
     return TripPlanner(get_places(key))
+
+
+@st.cache_data(show_spinner="Loading 236k world cities (one-time)…")
+def get_world_cities():
+    """GeoNames cities500 — EVERY city on Earth ≥500 people, villages to
+    capitals, with alternate names (Bombay→Mumbai, Cherrapunji→Sohra).
+    Built by src/build_world_cities.py (free, no key). File is gitignored."""
+    p = ROOT / "data" / "raw" / "cities_world.csv"
+    return pd.read_csv(p) if p.exists() else None
 
 
 def short(name: str, width: int = 58) -> str:
@@ -356,29 +368,59 @@ if plan and plan["key"] == key:
         st.subheader("⭐ Daily guide — time & budget boxed")
         render_guide(guide)
 
+        # unique stay towns in visit order (used by weather + hotel picks below)
+        towns = []
+        for d in guide:
+            if d["town"] and d["town"] not in towns:
+                towns.append(d["town"])
+
         if is_round:
             ret = _num(route_df.iloc[-2]["km_to_next"]) or 0.0
             if ret > LONG_DRIVE_KM:
                 st.warning(f"🚗 Return drive ≈ {ret:,.0f} km — add buffer days or consider flying back!")
 
+        # --- 🌦️ LIVE weather at each stay town (E3 — the wishlist!) --- #
+        tw_in = []
+        for t in towns:
+            m = planner.places[planner.places["city"].astype(str) == t]
+            if len(m):
+                r0 = m.iloc[0]
+                tw_in.append({"town": t, "lat": float(r0["lat"]), "lon": float(r0["lon"])})
+        tw = weather.trip_weather(tw_in[:6], timeout=6)
+        if tw is not None:
+            st.subheader("🌦️ Live weather at your stays (OpenWeather)")
+            st.dataframe(tw, use_container_width=True, hide_index=True)
+            st.caption("'Carry' = weather-driven essentials: rain → umbrella/raincoat, "
+                       "heat → sunscreen/water, cold → layers.")
+
         # --- 🏨 hotel picks near each stay town --------------------- #
         hotels = load_side("hotels", key)
         if hotels is not None and not hotels.empty:
             hr = HotelRecommender().fit(hotels)
-            towns = []
-            for d in guide:
-                if d["town"] not in towns:
-                    towns.append(d["town"])
             per_night = money["stays"]["pp"] / max(money["stays"]["nights"], 1)
             st.subheader("🏨 Stay picks (budget-fit + one upgrade)")
+            # 💰 prices change BY DATE — pick your dates once, every link below
+            # opens the platform with them pre-filled → LIVE current prices.
+            dc1, dc2 = st.columns(2)
+            ci = dc1.date_input("Check-in", date.today() + timedelta(days=7),
+                                key="ci")
+            co = dc2.date_input("Check-out", date.today() + timedelta(days=9),
+                                key="co")
+            st.caption("Sample ₹ = our static budget estimate. Real hotel prices "
+                       "change by date — tap a link to see LIVE prices & ratings "
+                       "on the platform for your exact dates.")
             for t in towns:
                 picks = hr.recommend(t, budget_pp_night=per_night, travellers=int(travellers))
                 if not picks.empty:
                     with st.expander(f"🏨 {t} — room budget ≈ ₹{per_night * 2:,.0f} / night"):
                         for _, h in picks.iterrows():
+                            bl = booking_links(h["name"], t, str(ci), str(co))
                             st.markdown(f"**{h['name']}** · {h['style']} · "
-                                        f"₹{h['price_per_night_inr']:,}/night · ⭐ {h['rating']}"
-                                        f" — {h['notes']}")
+                                        f"sample ₹{h['price_per_night_inr']:,}/night · "
+                                        f"⭐ {h['rating']} — {h['notes']}")
+                            st.markdown(f"[💰 live price — Booking]({bl['booking']}) · "
+                                        f"[🔍 compare — Google Hotels]({bl['google']}) · "
+                                        f"[GoIbibo]({bl['goibibo']})")
 
         # --- 📤 take the plan with you ------------------------------ #
         st.subheader("📤 Take your plan with you")
@@ -419,8 +461,9 @@ st.subheader("🧑‍🤝‍🧑 Accounts · squads · companion · demo commerc
 st.caption("Demo mode — accounts in SQLite, payments captured in TEST mode "
            "(no real money moves), leaderboard seeded, GPS simulated.")
 
-tab_acct, tab_squad, tab_buddy, tab_shop = st.tabs(
-    ["👤 Account", "👥 Squad & money", "🤝 Companion", "💳 Book & pay"])
+tab_acct, tab_squad, tab_buddy, tab_shop, tab_world = st.tabs(
+    ["👤 Account", "👥 Squad & money", "🤝 Companion", "💳 Book & pay",
+     "🌍 Any city on Earth"])
 
 # ---------------- 👤 ACCOUNT: signup / login / history ------------- #
 with tab_acct:
@@ -618,3 +661,101 @@ with tab_shop:
     cab_km = c2.number_input("Km you'll drive today", 0, 2000, 200, key="cab_km")
     st.dataframe(cab_recommend(cab_trav, cab_km), use_container_width=True,
                  hide_index=True)
+
+# ---------------- 🌍 EXPLORER: any city on Earth -------------------- #
+with tab_world:
+    cities = get_world_cities()
+    if cities is None:
+        st.info("One-time setup — run `.venv\\Scripts\\python src\\build_world_cities.py` "
+                "to download the free GeoNames database: **236,731 cities**, "
+                "tiny villages to big capitals (no API key, ~1 minute).")
+    else:
+        q = st.text_input("Type ANY city on Earth — tiny village or big capital",
+                          "Cherrapunji")
+        if q.strip():
+            ql = q.strip().lower()
+            # search official name OR alternate names (Bombay→Mumbai works!)
+            hits = cities[(cities["name"].str.lower().str.contains(ql, regex=False))
+                          | (cities["alt_names"].fillna("")
+                             .str.lower().str.contains(ql, regex=False))]
+            hits = hits.sort_values("population", ascending=False).head(12)
+            if hits.empty:
+                st.warning("No match — try another spelling.")
+            else:
+                labels = [f"{r['name']} ({r['country']}) · {int(r['population']):,} people"
+                          for _, r in hits.iterrows()]
+                pick = st.selectbox("Which one?", labels)
+                row = hits.iloc[labels.index(pick)]
+                lat, lon = float(row["lat"]), float(row["lon"])
+                region = str(row["admin1"])
+                if region in ("", "nan"):
+                    region = "—"
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("📍 City", row["name"])
+                c2.metric("🗺️ Region", f"{row['country']} · {region}")
+                c3.metric("👥 Population", f"{int(row['population']):,}")
+                st.map(pd.DataFrame([{"lat": lat, "lon": lon}]))
+
+                # 🌦️ live weather NOW + 5-day forecast (free OpenWeather)
+                w = weather.current(lat, lon, timeout=6)
+                if w:
+                    wc1, wc2, wc3, wc4 = st.columns(4)
+                    wc1.metric("🌡️ Now", f"{w['temp_c']}°C", f"feels {w['feels_c']}°C")
+                    wc2.metric("☁️ Condition", w["condition"])
+                    wc3.metric("☔ Rain chance", f"{w['rain_chance_pct']}%")
+                    wc4.metric("💨 Wind", f"{w['wind_kmh']} km/h")
+                    fc = weather.forecast_daily(lat, lon, timeout=6)
+                    if fc is not None:
+                        st.dataframe(fc, use_container_width=True, hide_index=True)
+                    carry = weather.day_essentials(w["temp_c"], w["rain_chance_pct"],
+                                                   w["condition"])
+                    if carry:
+                        st.info("🎒 Carry today: " + " · ".join(carry))
+
+                # 🏛️ nearby UNESCO World Heritage sites (real km, our haversine)
+                wp = get_places("world")
+                if wp is not None:
+                    dists = np.array([haversine_km(lat, lon, float(a), float(b))
+                                      for a, b in zip(wp["lat"], wp["lon"])])
+                    near = wp.assign(km=dists).query("km <= 250").sort_values("km")
+                    if not near.empty:
+                        st.markdown("**🏛️ World Heritage sites nearby (real km)**")
+                        st.dataframe(near[["name", "city", "km"]].head(8),
+                                     use_container_width=True, hide_index=True)
+
+                # 🏨 REAL stays around the city (OpenStreetMap, cached)
+                hs = osm_places.hotels_near(lat, lon, radius_km=25,
+                                            timeout=20, budget_s=30)
+                if hs is not None and not hs.empty:
+                    st.markdown(f"**🏨 Real stays mapped around {row['name']}** "
+                                f"(OpenStreetMap · {len(hs)} found)")
+                    # 💰 same live-price rule as everywhere: OSM has no prices,
+                    # so every stay gets a Booking deep-link with YOUR dates.
+                    ws1, ws2 = st.columns(2)
+                    wci = ws1.date_input("Check-in", date.today() + timedelta(days=7),
+                                         key="wci")
+                    wco = ws2.date_input("Check-out", date.today() + timedelta(days=9),
+                                         key="wco")
+                    hs_live = hs.assign(price_link=[
+                        booking_links(n, str(row["name"]), str(wci), str(wco))["booking"]
+                        for n in hs["name"]])
+                    st.dataframe(
+                        hs_live[["name", "kind", "price_link"]],
+                        use_container_width=True, hide_index=True,
+                        column_config={"price_link": st.column_config.LinkColumn(
+                            "💰 live price (your dates)")})
+                    st.caption("Names/locations are REAL OSM data. Prices aren't in OSM "
+                               "— tap 💰 to see LIVE prices & ratings on Booking.com "
+                               "with your dates pre-filled (hotel costs change by date, "
+                               "so we never freeze them).")
+                    st.map(hs, latitude="lat", longitude="lon",
+                           use_container_width=True)
+
+                sg = osm_places.sights_near(lat, lon, radius_km=25,
+                                            timeout=20, budget_s=30)
+                if sg is not None and not sg.empty:
+                    with st.expander(f"🏛️ {len(sg)} real sights mapped around "
+                                     f"{row['name']}"):
+                        st.dataframe(sg[["name", "kind"]], use_container_width=True,
+                                     hide_index=True)

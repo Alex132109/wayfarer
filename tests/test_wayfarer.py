@@ -18,8 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import src.itinerary as it
+from src import osm_places, weather
 from src.data_loader import clean_places, find_data_file, haversine_km, load_places
 from src.daily_guide import build_daily_guide, essentials_list
+from src.exports import booking_links
 from src.food_recommender import FoodRecommender, HotelRecommender, load_side
 from src.itinerary import TripPlanner
 from src.recommender import PlaceRecommender
@@ -321,3 +323,125 @@ def test_website_runs_end_to_end():
     at.run()
     assert not at.exception
     assert any("created" in s.value for s in at.success), list(at.success)
+
+
+# ================================================================ #
+#  E3 weather — offline tests (monkeypatch the network call)        #
+# ================================================================ #
+def test_weather_day_essentials_rules():
+    """The carry-item rule engine, pinned without any network."""
+    assert "umbrella" in " ".join(weather.day_essentials(24, 80)).lower()
+    assert "sunscreen" in " ".join(weather.day_essentials(34, 0)).lower()
+    assert "jacket" in " ".join(weather.day_essentials(5, 0)).lower()
+    assert "gloves" in " ".join(weather.day_essentials(-2, 0, "snow")).lower()
+    assert weather.day_essentials(24, 0) == []          # pleasant & dry → nothing
+
+
+def test_weather_offline_stays_quiet(monkeypatch):
+    """No key / no network → every function returns None. The app must
+    NEVER crash because a weather server is down (graceful degradation)."""
+    monkeypatch.setattr(weather, "api_key", lambda: None)
+    assert weather.current(28.6, 77.2) is None
+    assert weather.forecast_daily(28.6, 77.2) is None
+    assert weather.trip_weather(
+        [{"town": "Delhi", "lat": 28.6, "lon": 77.2}]) is None
+
+
+def test_weather_current_parses_canned(monkeypatch):
+    canned = {"main": {"temp": 28.04, "feels_like": 30.0, "humidity": 40},
+              "weather": [{"description": "clear sky"}],
+              "wind": {"speed": 3.5}}                     # km/h = 3.6 × m/s
+    monkeypatch.setattr(weather, "api_key", lambda: "test-key")
+    monkeypatch.setattr(weather, "_fetch_json", lambda url, timeout=20: canned)
+    w = weather.current(28.6, 77.2)
+    assert w["temp_c"] == 28.0 and w["feels_c"] == 30.0
+    assert w["condition"] == "Clear Sky"
+    assert w["rain_chance_pct"] == 0 and w["wind_kmh"] == 13
+    assert w["humidity"] == 40
+
+
+def test_weather_forecast_aggregates_3h_into_days(monkeypatch):
+    """The free forecast = 40 × 3-hourly rows → we MIN/MAX/SUM them per day."""
+    canned = {"list": [
+        {"dt_txt": "2027-01-01 03:00:00",
+         "main": {"temp": 20, "temp_min": 18, "temp_max": 22},
+         "pop": 0.4, "rain": {"3h": 1.0},
+         "weather": [{"description": "light rain"}]},
+        {"dt_txt": "2027-01-01 12:00:00",
+         "main": {"temp": 26, "temp_min": 24, "temp_max": 28},
+         "pop": 0.0, "weather": [{"description": "clear sky"}]},
+        {"dt_txt": "2027-01-02 09:00:00",
+         "main": {"temp": 15, "temp_min": 12, "temp_max": 17},
+         "pop": 0.9, "rain": {"3h": 5.0},
+         "weather": [{"description": "moderate rain"}]},
+    ]}
+    monkeypatch.setattr(weather, "api_key", lambda: "test-key")
+    monkeypatch.setattr(weather, "_fetch_json", lambda url, timeout=20: canned)
+    fc = weather.forecast_daily(25.3, 91.6, days=5)
+    assert fc is not None and len(fc) == 2
+    r1 = fc.iloc[0]
+    assert r1["min_c"] == 18.0 and r1["max_c"] == 28.0     # min/max across entries
+    assert r1["rain_mm"] == 1.0 and r1["rain_chance_pct"] == 40
+    assert fc.iloc[1]["rain_mm"] == 5.0 and fc.iloc[1]["rain_chance_pct"] == 90
+
+
+# ================================================================ #
+#  OSM stays/sights — offline parsing of canned Overpass elements    #
+# ================================================================ #
+def test_osm_to_df_skips_unnamed_and_reads_ways():
+    """Nodes carry lat/lon directly; ways carry a `center` object; unnamed
+    objects are useless for a traveller and must be dropped."""
+    elements = [
+        {"lat": 25.5, "lon": 91.8,
+         "tags": {"name": "Ri Kynjai", "tourism": "hotel"}},
+        {"center": {"lat": 25.6, "lon": 91.9},
+         "tags": {"name": "Old Fort", "historic": "castle"}},
+        {"lat": 25.7, "lon": 91.8, "tags": {"tourism": "hotel"}},  # unnamed → skip
+    ]
+    df = osm_places._to_df(elements)
+    assert len(df) == 2
+    assert "Ri Kynjai" in set(df["name"]) and "Old Fort" in set(df["name"])
+    assert set(df["kind"]) == {"hotel", "castle"}
+    assert df["lat"].between(-90, 90).all() and df["lon"].between(-180, 180).all()
+
+
+def test_osm_offline_stays_quiet(monkeypatch):
+    """No network → hotels_near/sights_near return None (feature stays quiet)."""
+    monkeypatch.setattr(osm_places, "_fetch",
+                        lambda q, timeout=90, budget_s=60: None)
+    assert osm_places.hotels_near(25.58, 91.89) is None
+    assert osm_places.sights_near(28.61, 77.21) is None
+
+
+# ================================================================ #
+#  💰 Live-price booking links (the anti-frozen-price rule)          #
+# ================================================================ #
+def test_booking_links_carry_dates_and_platforms():
+    bl = booking_links("Ri Kynjai", "Shillong", "2027-01-10", "2027-01-12")
+    assert bl["booking"].startswith("https://www.booking.com/searchresults.html")
+    assert "checkin=2027-01-10" in bl["booking"]
+    assert "checkout=2027-01-12" in bl["booking"]
+    assert bl["google"].startswith("https://www.google.com/travel/search?q=")
+    assert bl["goibibo"].startswith("https://www.goibibo.com/search?q=")
+    # without dates → plain search link, no stale date params
+    assert "checkin=" not in booking_links("Ri Kynjai")["booking"]
+    # names get URL-encoded (spaces → %20 etc.)
+    encoded = booking_links("Hotel Anand", "Guwahati")["google"]
+    assert "Hotel%20Anand" in encoded
+
+
+# ================================================================ #
+#  🌍 Worldwide city database — runs ONLY if the file was built locally   #
+# ================================================================ #
+@pytest.mark.skipif(not (ROOT / "data" / "raw" / "cities_world.csv").exists(),
+                    reason="30 MB GeoNames file is gitignored — "
+                           "build it via src/build_world_cities.py")
+def test_world_cities_database():
+    w = pd.read_csv(ROOT / "data" / "raw" / "cities_world.csv")
+    assert len(w) > 150_000                      # every city ≥500 people
+    assert w["lat"].between(-90, 90).all() and w["lon"].between(-180, 180).all()
+    names = set(w["name"].astype(str).str.lower())
+    assert "shanghai" in names and "london" in names and "tokyo" in names
+    # alt-name search: "Cherrapunji" must be findable under Sohra
+    alts = w["alt_names"].fillna("").astype(str).str.lower()
+    assert alts.str.contains("cherrapunji", regex=False).any()
