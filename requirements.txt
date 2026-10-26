@@ -6,3 +6,6 @@ streamlit>=1.40
 
 # optional but handy for charts later
 matplotlib>=3.9
+
+# testing (pytest suite in tests/)
+pytest>=8.0
