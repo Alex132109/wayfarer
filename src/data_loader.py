@@ -38,7 +38,10 @@ def find_data_file(dataset: str | None = None) -> Path | None:
 
     if dataset:
         matches = [p for p in raw + sample if dataset.lower() in p.name.lower()]
-        return matches[0] if matches else None
+        # Core trip files start with "places_" — they WIN over side datasets
+        # (food_*, hotels_*) that also mention the token in their name.
+        places_matches = [p for p in matches if p.name.lower().startswith("places_")]
+        return (places_matches or matches)[0] if matches else None
 
     return raw[0] if raw else (sample[0] if sample else None)
 
