@@ -21,11 +21,18 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.accounts import login, save_trip, signup, trip_history
+from src.companion import (LANGUAGE_PACKS, battery_buddy, language_quiz,
+                           leaderboard, location_share, sos_card)
+from src.commerce import (ESIM_PLANS, book_hotel, buy_esim, cab_recommend,
+                          esim_catalog, pay_group)
 from src.data_loader import clean_places, find_data_file, load_places
 from src.daily_guide import build_daily_guide, essentials_list
 from src.exports import google_maps_url, ics_calendar, save_trip_html
 from src.food_recommender import HotelRecommender, load_side
 from src.itinerary import LONG_DRIVE_KM, TripPlanner
+from src.squads import (add_expense, balances, create_group, group_info,
+                        join_group, members as squad_members, split_payment)
 from src.trip_money import estimate_budget
 
 st.set_page_config(page_title="Wayfarer — AI Trip Planner", page_icon="🧭", layout="wide")
@@ -125,6 +132,7 @@ HERO = """
   <p>Your AI trip planner — optimal routes, km for every leg, and day-wise stays.</p>
   <span class="tag">🤖 ML recommender</span><span class="tag">🗺️ route optimizer</span>
   <span class="tag">🏨 stay planner</span><span class="tag">🇮🇳 India first → 🌍 worldwide</span>
+  <span class="tag">👥 squads & split money</span><span class="tag">💳 demo payments (test mode)</span>
 </div>
 """
 
@@ -264,8 +272,8 @@ with st.sidebar:
     travellers = st.number_input("👥 Travellers", 1, 20, 2)
     style = st.selectbox("💎 Trip style",
                          ["budget", "economy", "comfort", "premium", "luxury", "super-luxury"], 2)
-    mode = st.selectbox("🛺 Transport mode",
-                        ["mixed", "car", "cab", "bike", "bus", "train", "flight"], 0)
+    transport_mode = st.selectbox("🛺 Transport mode",
+                                  ["mixed", "car", "cab", "bike", "bus", "train", "flight"], 0)
     month = st.text_input("🗓️ Travel month (season-aware picks)", "Oct")
     diet = st.selectbox("🥗 Diet for food picks",
                         ["No preference", "Veg", "Vegan", "Eggetarian", "NonVeg"], 0)
@@ -335,7 +343,7 @@ if plan and plan["key"] == key:
 
     # --- 💰 budget (styles + emergency fund) ----------------------- #
     money = estimate_budget(int(plan["days"]), int(travellers), float(total_km),
-                            mode=mode, style=style)
+                            mode=transport_mode, style=style)
     st.markdown(money_html(money), unsafe_allow_html=True)
 
     # --- ⭐ daily guide (supersedes plain day cards) ---------------- #
@@ -394,8 +402,219 @@ if plan and plan["key"] == key:
     with st.expander("🗂️ View raw data table"):
         st.dataframe(route_df, use_container_width=True, hide_index=True)
 
-    st.caption("ℹ️ Distances are straight-line (great-circle); road km are usually 20–30% more.")
+    st.caption("ℹ️ Distances = REAL road km via OSRM when online (disk-cached); "
+               "otherwise straight-line × 1.25 estimates.")
 elif plan:
     st.info("The sidebar changed — click **Plan my trip** to refresh your itinerary.")
 else:
     st.info("👆 Set your trip in the sidebar, then click **Plan my trip**!")
+
+# ---------------------------------------------------------------- #
+#  PHASE 2–3 DEMO — accounts · squads · companion · commerce         #
+#  Everything below is demo/test-mode: SQLite accounts, simulated    #
+#  payments (NO real money), seed leaderboard, simulated GPS.        #
+# ---------------------------------------------------------------- #
+st.divider()
+st.subheader("🧑‍🤝‍🧑 Accounts · squads · companion · demo commerce")
+st.caption("Demo mode — accounts in SQLite, payments captured in TEST mode "
+           "(no real money moves), leaderboard seeded, GPS simulated.")
+
+tab_acct, tab_squad, tab_buddy, tab_shop = st.tabs(
+    ["👤 Account", "👥 Squad & money", "🤝 Companion", "💳 Book & pay"])
+
+# ---------------- 👤 ACCOUNT: signup / login / history ------------- #
+with tab_acct:
+    user = st.session_state.get("user")
+    if user is None:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**New here?**")
+            su_name = st.text_input("Choose a username", key="su_name")
+            su_pass = st.text_input("Choose a password", type="password", key="su_pass")
+            if st.button("Sign up", key="btn_signup"):
+                r = signup(su_name, su_pass)
+                if r["ok"]:
+                    st.success("Account created — now log in on the right!")
+                else:
+                    st.error(r["error"])
+        with c2:
+            st.markdown("**Returning?**")
+            li_name = st.text_input("Username", key="li_name")
+            li_pass = st.text_input("Password", type="password", key="li_pass")
+            if st.button("Log in", key="btn_login"):
+                r = login(li_name, li_pass)
+                if r["ok"]:
+                    st.session_state["user"] = r
+                    st.rerun()
+                else:
+                    st.error(r["error"])
+    else:
+        st.success(f"Logged in as **{user['username']}** — your trip history:")
+        if st.button("Log out"):
+            st.session_state.pop("user", None)
+            st.rerun()
+        st.dataframe(trip_history(user["user_id"]), use_container_width=True,
+                     hide_index=True)
+        plan_now = st.session_state.get("last_plan")
+        if plan_now and plan_now["key"] == key:
+            if st.button("💾 Save my last planned trip to history"):
+                route = plan_now["route_df"]
+                last = str(route.iloc[-1]["name"]).replace("↩️ ", "")
+                save_trip(user["user_id"], str(route.iloc[0]["name"]), last,
+                          int(plan_now["days"]), float(plan_now["total_km"]), style)
+                st.rerun()
+
+# ---------------- 👥 SQUAD: groups + the 25k×5 payment ------------- #
+with tab_squad:
+    user = st.session_state.get("user")
+    if user is None:
+        st.info("Log in on the Account tab first — squads belong to users.")
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            gname = st.text_input("New squad name", "Japan Squad", key="sq_name")
+            if st.button("➕ Create squad & get invite code"):
+                r = create_group(gname, user["user_id"], user["username"])
+                st.session_state["squad"] = r["group_id"]
+        with c2:
+            code = st.text_input("Or join with an invite code", key="sq_code")
+            if st.button("🔗 Join squad"):
+                r = join_group(code, user["user_id"], user["username"])
+                if r["ok"]:
+                    st.session_state["squad"] = r["group_id"]
+                else:
+                    st.error(r["error"])
+
+        gid = st.session_state.get("squad")
+        if gid:
+            info = group_info(gid)
+            st.success(f"👥 **{info['name']}** — invite code: `{info['invite_code']}` "
+                       f"(share it, friends join like a WhatsApp group)")
+            mdf = squad_members(gid)
+            st.dataframe(mdf, use_container_width=True, hide_index=True)
+
+            # 💸 THE wishlist scenario: admin pays 25k×5 ONCE, or each pays 25k
+            st.markdown("**💸 Group payment (test-mode)**")
+            p1, p2, p3 = st.columns(3)
+            pp = p1.number_input("Per-person budget (₹)", 500, 500000, 25000,
+                                 step=500, key="gp_pp")
+            how = p2.selectbox("Who pays?",
+                               ["admin pays all at once", "each pays their share"])
+            ppl = p3.number_input("People", 1, 12, min(len(mdf), 12), key="gp_n")
+            if st.button("💳 Capture payment (demo)"):
+                style_ = "admin_all" if how.startswith("admin") else "each_own"
+                orders = pay_group(pp, int(ppl), style_)
+                total = sum(o["amount"] for o in orders) / 100
+                st.success(f"Captured {len(orders)} order(s) — ₹{total:,.0f} collected "
+                           f"(test mode: no real money moved)")
+
+            # 📒 Splitwise-style expense tracker with net balances
+            st.markdown("**📒 Squad expense tracker** (who owes whom)")
+            e1, e2, e3 = st.columns([2, 1, 2])
+            payer = e1.selectbox("Paid by", mdf["username"].tolist(), key="exp_payer")
+            amt = e2.number_input("Amount (₹)", 0, 1000000, 8000, step=100, key="exp_amt")
+            desc = e3.text_input("What for", "team dinner", key="exp_desc")
+            if st.button("Add expense"):
+                all_names = mdf["username"].tolist()
+                r = add_expense(gid, payer, amt, desc, all_names)
+                st.success(f"₹{amt:,.0f} split — ₹{r['share_each']:,.0f} each among "
+                           f"{len(all_names)} members")
+            st.dataframe(balances(gid), use_container_width=True, hide_index=True)
+            st.caption("Positive net = squad owes them · negative = they owe.")
+
+# ---------------- 🤝 COMPANION: leaderboard · language · safety ---- #
+with tab_buddy:
+    c1, c2 = st.columns(2)
+    with c1:
+        dest = st.selectbox("🏆 Leaderboard destination", ["japan", "meghalaya"],
+                            key="lb_dest")
+        st.dataframe(leaderboard(dest), use_container_width=True, hide_index=True)
+        st.caption("Seed data + scoring model: execution 60% + under-budget 40%.")
+    with c2:
+        lang = st.selectbox("🗣️ Language crash course", list(LANGUAGE_PACKS.keys()),
+                            key="lang_dest")
+        for word, phrase in LANGUAGE_PACKS[lang].items():
+            st.markdown(f"- **{word}** → {phrase}")
+
+    st.markdown("**🧠 Quick quiz** — pick answers, then check")
+    qs = language_quiz(lang)
+    answers = [st.radio(f"{i + 1}. {q}", opts, key=f"quiz_{lang}_{i}", index=None,
+                        horizontal=True)
+               for i, (q, opts, _a) in enumerate(qs)]
+    if st.button("Check my answers"):
+        score = sum(1 for (_q, opts, a), ans in zip(qs, answers) if ans == opts[a])
+        st.success(f"Score: {score}/{len(qs)} — "
+                   f"{'great!' if score >= 3 else 're-read the pack above 🙂'}")
+
+    st.markdown("**🔋 Battery buddy** — the wishlist rule: <20% → don't wander alone")
+    levels = {}
+    batt_cols = st.columns(5)
+    for i, bc in enumerate(batt_cols, 1):
+        levels[f"member{i}"] = bc.slider(f"member{i}", 0, 100, 70, key=f"bat{i}")
+    alerts = battery_buddy(levels)
+    for a in alerts:
+        st.warning(a)
+    if not alerts:
+        st.success("All batteries ≥20% — everyone can explore today!")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**📍 Location share** (simulated snapshot)")
+        share_names = (squad_members(gid)["username"].tolist()
+                       if st.session_state.get("squad")
+                       else ["member1", "member2", "member3"])
+        pts = {n: (35.0 + 0.01 * i, 135.0 + 0.02 * i) for i, n in enumerate(share_names)}
+        st.dataframe(location_share(pts), use_container_width=True, hide_index=True)
+        st.caption("Simulated — real live-sharing needs phone GPS + WebSocket (Phase 5).")
+    with c2:
+        st.markdown("**🆘 SOS card** — screenshot before the trip")
+        st.json(sos_card(lang))
+
+# ---------------- 💳 SHOP: bookings · eSIM · cabs (demo) ----------- #
+with tab_shop:
+    st.caption("Test-mode commerce — orders captured in demo storage; "
+               "NO real money, NO real bookings.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**🏨 Book a stay (demo)**")
+        hotels = load_side("hotels", key)
+        if hotels is None or hotels.empty:
+            st.info("No hotels dataset for this destination yet.")
+        else:
+            hnames = hotels["name"].astype(str).tolist()
+            hname = st.selectbox("Hotel from our picks", hnames, key="bk_hotel")
+            row = hotels[hotels["name"].astype(str) == hname].iloc[0]
+            price = _num(row["price_per_night_inr"]) or 0.0
+            st.caption(f"{row.get('city', '')} · ⭐ {_num(row['rating']) or '–'} · "
+                       f"₹{price:,.0f}/night")
+            b1, b2 = st.columns(2)
+            b_nights = b1.number_input("Nights", 1, 30, 3, key="bk_n")
+            b_rooms = b2.number_input("Rooms", 1, 10, 2, key="bk_r")
+            if price <= 0:
+                st.warning("No price data for this hotel — pick another.")
+            elif st.button("Book & pay (demo)"):
+                guest = (st.session_state.get("user") or {}).get("username", "guest")
+                b = book_hotel(hname, str(row.get("city", "")), b_nights, b_rooms,
+                               price, guest)
+                st.success(f"✅ {b['confirmation']} — {b['hotel']}: {b['rooms']} room(s) "
+                           f"× {b['nights']} night(s) = ₹{b['total_inr']:,.0f} (test mode)")
+
+    with c2:
+        st.markdown("**📶 eSIM store (demo)**")
+        esim_dest = st.selectbox("Where do you need data?", list(ESIM_PLANS.keys()),
+                                 key="esim_dest")
+        cat = esim_catalog(esim_dest)
+        st.dataframe(cat, use_container_width=True, hide_index=True)
+        plan_name = st.selectbox("Pick a plan", cat["plan"].tolist(), key="esim_plan")
+        if st.button("Buy eSIM (demo)"):
+            r = buy_esim(esim_dest, plan_name)
+            st.success(f"✅ {r['activation_code']} — {r['plan']} for "
+                       f"₹{r['paid_inr']:,.0f} (test mode)")
+
+    st.markdown("**🚕 Cab recommendation** — cheapest vehicle that fits the group")
+    c1, c2 = st.columns(2)
+    cab_trav = c1.number_input("Travellers", 1, 12, 2, key="cab_trav")
+    cab_km = c2.number_input("Km you'll drive today", 0, 2000, 200, key="cab_km")
+    st.dataframe(cab_recommend(cab_trav, cab_km), use_container_width=True,
+                 hide_index=True)

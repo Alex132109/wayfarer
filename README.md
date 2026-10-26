@@ -1,7 +1,7 @@
 # 🧭 Wayfarer
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
-![Tests](https://img.shields.io/badge/tests-18%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen)
 ![ML](https://img.shields.io/badge/ML-TF--IDF%20%2B%20hybrid%20scoring-orange)
 ![Roads](https://img.shields.io/badge/distances-real%20road%20km%20(OSRM)-9cf)
 

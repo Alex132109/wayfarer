@@ -93,6 +93,15 @@ def members(group_id: int, db_path: Path | None = None) -> pd.DataFrame:
             conn, params=(group_id,))
 
 
+def group_info(group_id: int, db_path: Path | None = None) -> dict | None:
+    """Name + invite code for display (used after joining via a code)."""
+    with _connect(db_path) as conn:
+        row = conn.execute("SELECT name, invite_code FROM groups WHERE id=?",
+                           (group_id,)).fetchone()
+    return {"group_id": group_id, "name": row[0],
+            "invite_code": row[1]} if row else None
+
+
 # ---------------------------------------------------------------- #
 #  💸 GROUP PAYMENT — the user's exact 25k×5 example                  #
 # ---------------------------------------------------------------- #

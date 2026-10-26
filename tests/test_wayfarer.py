@@ -289,3 +289,23 @@ def test_esim_catalog_and_demo_buy():
     assert not cat.empty
     bought = buy_esim("japan", cat.iloc[0]["plan"])
     assert bought["activation_code"].startswith("ESIM-")
+
+
+def test_website_runs_end_to_end():
+    """Streamlit's official AppTest — runs app.py exactly like a browser
+    would, then drives the signup widget. Catches any runtime error in the
+    site script (a plain HTTP-200 check can NOT do that)."""
+    import uuid
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(ROOT / "app" / "app.py"), default_timeout=180)
+    at.run()
+    assert not at.exception, f"app.py raised: {at.exception}"
+
+    uname = "smoke_" + uuid.uuid4().hex[:6]
+    at.text_input(key="su_name").set_value(uname)
+    at.text_input(key="su_pass").set_value("trip123")
+    at.button(key="btn_signup").click()
+    at.run()
+    assert not at.exception
+    assert any("created" in s.value for s in at.success), list(at.success)
