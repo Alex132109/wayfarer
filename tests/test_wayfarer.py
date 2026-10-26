@@ -242,7 +242,7 @@ def test_squad_invite_split_and_balances(tmp_path):
     assert join_group(g["invite_code"], ids[1], "member2", db)["ok"] is True
     s = split_payment(25000, 5)
     assert s["admin_all"]["amount"] == 125000 == s["each_own"]["total"]
-    add_expense(g["group_id"], "m1", 6000, "dinner", ["m1", "m2"], db)
+    add_expense(g["group_id"], "member1", 6000, "dinner", ["member1", "member2"], db)
     b = balances(g["group_id"], db)
     assert abs(b["net"].sum()) < 0.01, "balances must cancel to zero"
 
