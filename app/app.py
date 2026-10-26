@@ -1,19 +1,20 @@
 """
-🧭 Wayfarer — the website  (WEEK 4 ✅)
+🧭 Wayfarer — the website  (WEEK 4 ✅ · redesigned ✨)
 
-A Streamlit web app that wires the whole ML pipeline into a UI:
+A Streamlit web app that wires the whole ML pipeline into a styled UI:
 
     pick a country → interests OR your own stops → start/end + days
         → optimal route (km per leg) → day-wise plan with stays → map
 
 Run it:
     .venv\\Scripts\\streamlit run app\\app.py
-Then open the URL shown (usually http://localhost:8501).
 """
 
+import html
 import sys
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 # Make "src" importable no matter where streamlit is launched from
@@ -32,6 +33,97 @@ DATASETS = {
     "🌍 Worldwide (UNESCO sites)": "world",
 }
 
+# ---------------------------------------------------------------- #
+#  Design system (CSS — kept in a plain string: no f-string braces) #
+# ---------------------------------------------------------------- #
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+
+html, body, .stApp, [data-testid="stSidebar"] { font-family: 'Poppins', sans-serif; }
+.block-container { padding-top: 1.2rem; max-width: 1180px; }
+#MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; }
+
+/* hero banner */
+.hero {
+  background: linear-gradient(120deg, #0F172A 0%, #155E75 55%, #FF5A5F 140%);
+  border-radius: 22px; padding: 34px 40px; color: #fff; margin-bottom: 18px;
+}
+.hero h1 { font-size: 2.5rem; font-weight: 800; margin: 0; letter-spacing: .5px; }
+.hero p  { margin: 6px 0 0; opacity: .92; font-size: 1.05rem; }
+.hero .tag {
+  display: inline-block; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
+  border-radius: 999px; padding: 2px 12px; font-size: .78rem; margin-right: 6px; margin-top: 12px;
+}
+
+/* metric cards */
+.metrics { display: flex; gap: 14px; margin: 6px 0 14px; }
+.mcard {
+  flex: 1; background: #fff; border-radius: 16px; padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.08), 0 8px 24px rgba(15,23,42,.05);
+}
+.mcard .ico { font-size: 1.2rem; }
+.mcard .val { font-size: 1.65rem; font-weight: 800; color: #0F172A; line-height: 1.15; }
+.mcard .lab { font-size: .78rem; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+
+/* journey steps */
+.journey { margin: 4px 0 8px; }
+.stop {
+  display: flex; align-items: center; gap: 14px; background: #fff;
+  border-radius: 14px; padding: 12px 16px; margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.07);
+}
+.num {
+  width: 34px; height: 34px; min-width: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, #FF5A5F, #FF8A65);
+  color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  font-size: .95rem;
+}
+.num.ret { background: linear-gradient(135deg, #0E7490, #155E75); }
+.who { flex: 1; min-width: 0; }
+.nm  { font-weight: 700; color: #0F172A; font-size: 1rem; }
+.meta { color: #64748B; font-size: .82rem; }
+.km {
+  background: #EEF2F7; color: #0E7490; font-weight: 700; font-size: .82rem;
+  border-radius: 999px; padding: 5px 12px; white-space: nowrap;
+}
+
+/* day cards */
+.day {
+  display: flex; gap: 14px; align-items: flex-start; background: #fff;
+  border-left: 5px solid #FF5A5F; border-radius: 14px; padding: 14px 18px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.07);
+}
+.daychip {
+  background: #0F172A; color: #fff; font-weight: 700; font-size: .78rem;
+  border-radius: 999px; padding: 6px 12px; white-space: nowrap; margin-top: 2px;
+}
+.daybody b { color: #0F172A; }
+.sub { color: #64748B; font-size: .85rem; margin-top: 4px; }
+.sub.warn { color: #B91C1C; font-weight: 600; }
+
+/* buttons + headers */
+.stButton > button {
+  background: linear-gradient(90deg, #FF5A5F, #FF8A65); color: #fff; border: none;
+  border-radius: 999px; padding: .55rem 2.1rem; font-weight: 700; font-size: 1.02rem;
+  box-shadow: 0 6px 16px rgba(255,90,95,.30);
+}
+.stButton > button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+h2 { font-weight: 700; color: #0F172A; }
+[data-testid="stSidebar"] label { font-weight: 600; }
+</style>
+"""
+st.markdown(CSS, unsafe_allow_html=True)
+
+HERO = """
+<div class="hero">
+  <h1>🧭 Wayfarer</h1>
+  <p>Your AI trip planner — optimal routes, km for every leg, and day-wise stays.</p>
+  <span class="tag">🤖 ML recommender</span><span class="tag">🗺️ route optimizer</span>
+  <span class="tag">🏨 stay planner</span><span class="tag">🇮🇳 India first → 🌍 worldwide</span>
+</div>
+"""
+
 
 # ---------------------------------------------------------------- #
 #  Data & model (cached — built once per session)                  #
@@ -39,9 +131,7 @@ DATASETS = {
 @st.cache_data(show_spinner=False)
 def get_places(key: str):
     path = find_data_file(key)
-    if path is None:
-        return None
-    return clean_places(load_places(path))
+    return clean_places(load_places(path)) if path else None
 
 
 @st.cache_resource(show_spinner=False)
@@ -50,23 +140,79 @@ def get_planner(key: str):
 
 
 def short(name: str, width: int = 58) -> str:
-    """Trim very long place names (worldwide data has some monsters)."""
     return name if len(name) <= width else name[: width - 1] + "…"
 
 
 # ---------------------------------------------------------------- #
-#  Header                                                          #
+#  Renderers (styled HTML)                                         #
 # ---------------------------------------------------------------- #
-st.title("🧭 Wayfarer")
-st.caption("Tell me where, when and what you love — I'll plan the smartest trip.")
-st.divider()
+def metrics_html(total_km: float, n_stops: int, days: int, is_round: bool) -> str:
+    cards = [
+        ("🛣️", f"{total_km:,.0f}", "KM TOTAL"),
+        ("📍", str(n_stops), "STOPS"),
+        ("📅", str(days), "DAYS"),
+        ("🔁" if is_round else "➡️", "Round trip" if is_round else "One-way", "ROUTE TYPE"),
+    ]
+    body = "".join(
+        f'<div class="mcard"><div class="ico">{ico}</div>'
+        f'<div class="val">{html.escape(val)}</div><div class="lab">{lab}</div></div>'
+        for ico, val, lab in cards
+    )
+    return f'<div class="metrics">{body}</div>'
+
+
+def journey_html(route_df: pd.DataFrame) -> str:
+    rows = []
+    for _, r in route_df.iterrows():
+        nm = str(r["name"])
+        is_ret = nm.startswith("↩️")
+        num_cls = "num ret" if is_ret else "num"
+        num = "↩" if is_ret else str(int(r["stop"]))
+        rating = r.get("rating")
+        rate = f"⭐ {float(rating):.1f} · " if pd.notna(rating) else ""
+        fee = float(r["entry_fee_inr"]) if pd.notna(r["entry_fee_inr"]) else 0
+        fee_chip = f"🎟 ₹{int(fee):,}" if fee > 0 else "🎟 free"
+        kmn = float(r["km_to_next"])
+        km_chip = "" if (is_ret or kmn == 0) else f"→ {kmn:,.0f} km"
+        rows.append(
+            f'<div class="stop"><div class="{num_cls}">{num}</div>'
+            f'<div class="who"><div class="nm">{html.escape(nm)}</div>'
+            f'<div class="meta">{html.escape(str(r.get("city", "")))} · {rate}{fee_chip}</div></div>'
+            f'<div class="km">{km_chip}</div></div>'
+        )
+    return '<div class="journey">' + "".join(rows) + "</div>"
+
+
+def render_day_cards(stay_plan: list, cityof: dict) -> None:
+    day = 1
+    for seg in stay_plan:
+        label = f"DAY {day}" if seg["days"] == 1 else f"DAY {day}–{day + seg['days'] - 1}"
+        day += seg["days"]
+        place = seg["place"]
+        town = seg.get("stay_town") or cityof.get(place, place)
+        subs = []
+        if seg.get("en_route"):
+            subs.append("🚶 en-route: " + ", ".join(short(x, 38) for x in seg["en_route"]))
+        warn = ""
+        if seg.get("drive_km", 0) > LONG_DRIVE_KM:
+            line = f"🚗 long drive ~{seg['drive_km']:,.0f} km — add buffer day(s)!"
+            subs.append(line)
+            warn = " warn"
+        sub_html = "".join(f'<div class="sub{warn if "🚗" in s else ""}">{html.escape(s)}</div>' for s in subs)
+        st.markdown(
+            f'<div class="day"><div class="daychip">{label}</div>'
+            f'<div class="daybody"><b>{html.escape(short(place, 70))}</b> · 🏨 stay: <b>{html.escape(town)}</b>{sub_html}</div></div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ---------------------------------------------------------------- #
-#  Sidebar — inputs                                                #
+#  Page                                                            #
 # ---------------------------------------------------------------- #
+st.markdown(HERO, unsafe_allow_html=True)
+
 with st.sidebar:
-    st.header("Trip settings")
+    st.header("🧳 Trip settings")
     dataset_label = st.selectbox("Where to?", list(DATASETS.keys()), index=1)
     key = DATASETS[dataset_label]
 
@@ -81,50 +227,37 @@ with st.sidebar:
     mode = st.radio("How do you choose places?",
                     ["🎯 By my interests", "🗺️ I already know the stops"])
 
-    origin = st.selectbox("Start point", names,
-                          format_func=short,
-                          index=names.index("Berhampur") if "Berhampur" in names else 0)
-    destination = st.selectbox("End point", names,
-                               format_func=short,
-                               index=names.index("Berhampur") if "Berhampur" in names else 0)
+    berhampur = names.index("Berhampur") if "Berhampur" in names else 0
+    origin = st.selectbox("🅰️ Start point", names, index=berhampur, format_func=short)
+    destination = st.selectbox("🅱️ End point", names, index=berhampur, format_func=short)
     if origin == destination:
-        st.info("🔁 Start = End → Wayfarer will plan a ROUND TRIP loop!")
+        st.info("🔁 Start = End → planning a ROUND TRIP loop!")
 
-    days = st.number_input("Trip length (days)", 1, 30, 5)
+    days = st.number_input("📅 Trip length (days)", 1, 30, 5)
 
     interests, stops = [], []
     if mode.startswith("🎯"):
         tokens = set()
         for cats in places["category"].fillna("").astype(str).str.split(";"):
             tokens.update(t.strip().title() for t in cats if t.strip() and t.strip() != "UNESCO")
-        interests = st.multiselect("Your interests", sorted(tokens),
+        interests = st.multiselect("🎯 Your interests", sorted(tokens),
                                    default=sorted(tokens)[:2])
+        n_places = st.slider("Max places to include", 3, 12, 6)
     else:
-        stops = st.multiselect("Places to visit (order is optimized for you)",
+        stops = st.multiselect("🗺️ Places to visit (order optimized for you)",
                                names, format_func=short)
 
-
-# ---------------------------------------------------------------- #
-#  Plan the trip                                                   #
-# ---------------------------------------------------------------- #
-st.subheader("1. Your request")
-if mode.startswith("🎯"):
-    st.write(f"**From** {short(origin)} → **to** {short(destination)} · **{days} days** · loves {', '.join(interests) or '—'}")
-    ready = bool(interests)
-else:
-    st.write(f"**From** {short(origin)} → **to** {short(destination)} · **{days} days** · {len(stops)} chosen stops")
-    ready = len(stops) >= 1
-
+ready = bool(interests) if mode.startswith("🎯") else len(stops) >= 1
 if not ready:
-    st.warning("Pick at least one interest / stop to continue 🙂")
+    st.warning("Pick at least one interest / stop in the sidebar to continue 🙂")
     st.stop()
 
 if st.button("Plan my trip 🧭", type="primary"):
-    with st.spinner("Recommending places, optimizing route, splitting days..."):
+    with st.spinner("Recommending places → optimizing route → splitting days..."):
         try:
             if mode.startswith("🎯"):
                 route_df, total_km, stay_plan = planner.plan(
-                    origin, destination, interests, n_places=6, days=int(days))
+                    origin, destination, interests, n_places=n_places, days=int(days))
             else:
                 route_df, total_km, stay_plan = planner.plan_explicit(
                     origin, destination, stops, days=int(days))
@@ -132,52 +265,36 @@ if st.button("Plan my trip 🧭", type="primary"):
             st.error(str(e))
             st.stop()
 
-    # --- headline numbers ----------------------------------------- #
-    st.subheader("2. Your itinerary")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total distance", f"{total_km:,.0f} km")
-    m2.metric("Stops", len(route_df))
-    m3.metric("Days", int(days))
-    m4.metric("Options", "1 route", help="Multiple variants coming soon!")
+    is_round = str(route_df.iloc[-1]["name"]).startswith("↩️")
+    cityof = dict(zip(route_df["name"].astype(str), route_df["city"]))
 
-    # --- map ------------------------------------------------------ #
+    st.markdown(metrics_html(total_km, len(route_df), int(days), is_round),
+                unsafe_allow_html=True)
+
+    # map (points of the journey)
     loc = planner.places.set_index(planner.places["name"].astype(str))[["lat", "lon"]]
     pts = route_df.assign(
         lat=route_df["name"].map(loc["lat"]).astype(float),
         lon=route_df["name"].map(loc["lon"]).astype(float),
     ).dropna(subset=["lat", "lon"])
     if not pts.empty:
-        st.map(pts, latitude="lat", longitude="lon", use_container_width=True)
+        with st.container(height=430):
+            st.map(pts, latitude="lat", longitude="lon", use_container_width=True)
 
-    # --- route table ---------------------------------------------- #
-    st.dataframe(route_df, use_container_width=True, hide_index=True)
+    st.subheader("🗺️ Your route, stop by stop")
+    st.markdown(journey_html(route_df), unsafe_allow_html=True)
 
-    # --- day-wise plan with stays --------------------------------- #
     if stay_plan:
-        st.subheader("3. Day-wise plan with stays 🏨")
-        cityof = dict(zip(route_df["name"].astype(str), route_df["city"]))
-        day = 1
-        for seg in stay_plan:
-            label = f"Day {day}" if seg["days"] == 1 else f"Day {day}–{day + seg['days'] - 1}"
-            day += seg["days"]
-            place = seg["place"]
-            town = seg.get("stay_town") or cityof.get(place, place)
-            with st.container(border=True):
-                st.markdown(f"**{label}: {short(place, 70)}**  ·  🏨 stay: **{town}**")
-                bits = []
-                if seg.get("en_route"):
-                    bits.append(".en-route: " + ", ".join(short(x, 40) for x in seg["en_route"]))
-                if seg.get("drive_km", 0) > LONG_DRIVE_KM:
-                    bits.append(f"🚗 long drive ~{seg['drive_km']:.0f} km — add buffer day(s)!")
-                if bits:
-                    st.caption("   ·   ".join(bits))
-
-        # return-drive warning for round trips
-        if str(route_df.iloc[-1]["name"]).startswith("↩️"):
+        st.subheader("📅 Day-wise plan with stays")
+        render_day_cards(stay_plan, cityof)
+        if is_round:
             ret = float(route_df.iloc[-2]["km_to_next"])
             if ret > LONG_DRIVE_KM:
-                st.warning(f"🚗 Return drive ≈ {ret:.0f} km — plan buffer days or consider flying back!")
+                st.warning(f"🚗 Return drive ≈ {ret:,.0f} km — add buffer days or consider flying back!")
 
-    st.caption("ℹ️ Distances are straight-line (great-circle). Road km are usually 20–30% more.")
+    with st.expander("🗂️ View raw data table"):
+        st.dataframe(route_df, use_container_width=True, hide_index=True)
+
+    st.caption("ℹ️ Distances are straight-line (great-circle); road km are usually 20–30% more.")
 else:
-    st.info("👆 Click **Plan my trip** to see your optimized itinerary!")
+    st.info("👆 Set your trip in the sidebar, then click **Plan my trip**!")
