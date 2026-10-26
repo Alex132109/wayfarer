@@ -216,3 +216,76 @@ def test_tripplan_skip_shrinks_route(planner):
 def test_tripplan_rejects_unknown_input(planner):
     with pytest.raises(ValueError):
         TripPlan(planner, not_a_real_key=1)
+
+
+# ---------------------------------------------------------------- #
+#  Phase 2–3: accounts · squads · companion · commerce (demo-mode)   #
+# ---------------------------------------------------------------- #
+def test_signup_login_roundtrip(tmp_path):
+    """Accounts: signup → duplicate refused → login ok → wrong pw refused."""
+    from src.accounts import login, signup
+    db = tmp_path / "acct.db"
+    assert signup("aditi", "trip123", db)["ok"] is True
+    assert signup("aditi", "again1", db)["ok"] is False
+    assert login("aditi", "trip123", db)["ok"] is True
+    assert login("aditi", "WRONG", db)["ok"] is False
+
+
+def test_squad_invite_split_and_balances(tmp_path):
+    """Squads: invite-code join + the 25k×5 math + Splitwise cancellation."""
+    from src.accounts import signup
+    from src.squads import (add_expense, balances, create_group, join_group,
+                            split_payment)
+    db = tmp_path / "squad.db"
+    ids = [signup(f"member{i}", "pass1234", db)["user_id"] for i in range(1, 3)]
+    g = create_group("Japan Squad", ids[0], "member1", db)
+    assert join_group(g["invite_code"], ids[1], "member2", db)["ok"] is True
+    s = split_payment(25000, 5)
+    assert s["admin_all"]["amount"] == 125000 == s["each_own"]["total"]
+    add_expense(g["group_id"], "m1", 6000, "dinner", ["m1", "m2"], db)
+    b = balances(g["group_id"], db)
+    assert abs(b["net"].sum()) < 0.01, "balances must cancel to zero"
+
+
+def test_leaderboard_sorted_by_score():
+    from src.companion import leaderboard
+    lb = leaderboard("japan")
+    assert not lb.empty and lb["score"].is_monotonic_decreasing
+
+
+def test_battery_buddy_flags_low_power():
+    from src.companion import battery_buddy
+    alerts = battery_buddy({"a": 15, "b": 85})
+    assert len(alerts) == 1 and "a" in alerts[0]
+
+
+def test_demo_payment_blocks_double_capture():
+    from src.commerce import capture, create_order
+    o = create_order(25000, "test")
+    assert o["amount"] == 2_500_000, "gateways count money in paise"
+    assert capture(o["id"])["status"] == "paid"
+    with pytest.raises(ValueError):
+        capture(o["id"])                      # second capture must fail
+
+
+def test_pay_group_25k_x5_both_ways():
+    from src.commerce import pay_group
+    admin = pay_group(25000, 5, how="admin_all")
+    each = pay_group(25000, 5, how="each_own")
+    assert len(admin) == 1 and admin[0]["amount"] == 125000 * 100
+    assert len(each) == 5 and sum(o["amount"] for o in each) == 125000 * 100
+
+
+def test_cab_recommend_fits_group_cheapest_first():
+    from src.commerce import cab_recommend
+    cabs = cab_recommend(5, day_km=200)
+    assert (cabs["fits"] >= 5).all()
+    assert cabs["rate/km"].is_monotonic_increasing
+
+
+def test_esim_catalog_and_demo_buy():
+    from src.commerce import buy_esim, esim_catalog
+    cat = esim_catalog("japan")
+    assert not cat.empty
+    bought = buy_esim("japan", cat.iloc[0]["plan"])
+    assert bought["activation_code"].startswith("ESIM-")
