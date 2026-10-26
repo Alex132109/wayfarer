@@ -1,0 +1,13 @@
+name,city,state,category,rating,lat,lon,avg_time_hours,entry_fee_inr,best_time,suggested_days
+Tokyo (Asakusa & Shibuya),Tokyo,Honshu,City;Temple;Food;Shopping;Nightlife,4.6,35.6895,139.6917,8.0,0,Mar-Apr,2
+Nikko (Toshogu Shrine),Nikko,Honshu,Shrine;Temple;Nature;UNESCO,4.6,36.7229,139.6026,6.0,1300,Oct-Nov,1
+Mt Fuji (Kawaguchiko),Fujikawaguchiko,Honshu,Mountain;Scenic;Hiking;Nature,4.8,35.5131,138.7714,6.0,0,Jul-Oct,1
+Hakone (Onsen & Ropeway),Hakone,Honshu,Onsen;Scenic;Nature;Mountain,4.5,35.2324,139.1069,5.0,1000,All year,1
+Kyoto (Fushimi Inari & Gion),Kyoto,Honshu,Temple;Shrine;City;History;UNESCO,4.8,35.0116,135.7681,8.0,0,Mar-Apr,2
+Nara (Deer Park & Todai-ji),Nara,Honshu,Temple;Park;History;UNESCO,4.7,34.6851,135.8048,4.0,600,Mar-Apr,1
+Osaka (Castle & Dotonbori),Osaka,Honshu,City;Castle;Food;Nightlife,4.6,34.6937,135.5023,5.0,600,All year,1
+Himeji Castle,Himeji,Honshu,Castle;History;UNESCO,4.7,34.8394,134.6939,2.5,1000,Apr,0.5
+Hiroshima (Peace Memorial),Hiroshima,Honshu,Museum;History;Memorial,4.7,34.3853,132.4553,3.0,0,All year,1
+Miyajima (Itsukushima Shrine),Miyajima,Honshu,Shrine;Scenic;Nature;UNESCO,4.8,34.2960,132.3197,4.0,300,Oct-Nov,1
+Shirakawa-go Village,Shirakawa-go,Honshu,Village;Heritage;UNESCO;Scenic,4.6,36.2568,136.9060,3.0,0,Dec-Feb,1
+Kanazawa (Kenroku-en),Kanazawa,Honshu,Garden;City;History,4.6,36.5621,136.6626,3.0,320,Mar-Apr,1

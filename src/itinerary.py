@@ -264,3 +264,16 @@ if __name__ == "__main__":
         days=7,
     )
     print_trip(route_df, total_km, stay)
+
+    # 🇯🇵 Trip 4: Japan golden route — 12-day round trip from Tokyo
+    df_j = clean_places(load_places(find_data_file("japan")))
+    planner_j = TripPlanner(df_j)
+    route_df, total_km, stay = planner_j.plan_explicit(
+        origin="Tokyo (Asakusa & Shibuya)", destination="Tokyo (Asakusa & Shibuya)",
+        stops=["Nikko (Toshogu Shrine)", "Mt Fuji (Kawaguchiko)", "Hakone (Onsen & Ropeway)",
+               "Kyoto (Fushimi Inari & Gion)", "Nara (Deer Park & Todai-ji)",
+               "Osaka (Castle & Dotonbori)", "Himeji Castle", "Hiroshima (Peace Memorial)",
+               "Miyajima (Itsukushima Shrine)", "Shirakawa-go Village", "Kanazawa (Kenroku-en)"],
+        days=12,
+    )
+    print_trip(route_df, total_km, stay)

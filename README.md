@@ -87,8 +87,10 @@ wayfarer/
 ├── .gitignore
 ├── data/
 │   ├── raw/                   ← put your Kaggle CSVs here
-│   ├── sample/                ← sample data so code runs from Day 1
-│   │   └── places_india_sample.csv
+│   ├── sample/                ← starter datasets (work from Day 1, no downloads)
+│   │   ├── places_india_sample.csv
+│   │   ├── places_meghalaya_trip.csv
+│   │   └── places_japan_sample.csv
 │   └── processed/             ← cleaned data (generated)
 ├── src/
 │   ├── data_loader.py         ← load + clean + distance math (working ✅)

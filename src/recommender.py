@@ -55,7 +55,9 @@ class PlaceRecommender:
         """
         self.places = places.reset_index(drop=True)
 
-        text = self.places["category"].fillna("") + ";"
+        # Include the NAME too — many places carry interest words in their
+        # name itself (e.g. "Shrines and Temples of Nikko")!
+        text = self.places["name"].astype(str) + "; " + self.places["category"].fillna("")
         if "description" in self.places.columns:
             text = text + " " + self.places["description"].fillna("")
 
@@ -78,7 +80,16 @@ class PlaceRecommender:
         IMPORTANT: we call .transform (NOT fit_transform) here — the user's
         interests must use the SAME word-vocabulary learned in `fit`.
         """
-        text = " ".join(interests)
+        # Plural-aware both ways: user may type "temple" while the data says
+        # "temples" (or the reverse). Expand each interest into singular +
+        # plural so either spelling matches the learned vocabulary.
+        forms = set()
+        for w in interests:
+            forms.add(w)
+            forms.add(w + "s")
+            if w.endswith("s"):
+                forms.add(w[:-1])
+        text = " ".join(sorted(forms))
         user_vec = self.vectorizer.transform([text])          # 1 × n_words vector
         scores = cosine_similarity(user_vec, self.matrix)     # 1 × n_places scores
         return scores.flatten()
@@ -131,6 +142,9 @@ if __name__ == "__main__":
     rec = PlaceRecommender().fit(clean_places(load_places(path)))
 
     print(f"🔍 Interests: {interests}\n")
+    result = rec.recommend(interests, top_n=8)
+    if result.empty:
+        raise SystemExit(0)
     cols = ["name", "city", "category", "match_score"]
     if "rating" in rec.places.columns and rec.places["rating"].notna().any():
         cols.insert(2, "rating")
