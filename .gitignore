@@ -21,3 +21,6 @@ data/cache/
 # IDE
 .vscode/
 .idea/
+
+# generated exports (user downloads, not source)
+exports/
