@@ -18,6 +18,9 @@ data/raw/*.csv
 # OSRM road-km cache (regenerable from the network)
 data/cache/
 
+# raw Kaggle archives (re-download via: python src\build_india_dataset.py)
+data/raw/kaggle_tmp/
+
 # IDE
 .vscode/
 .idea/

@@ -111,23 +111,31 @@ class TripPlanner:
             return router._km(o, i) + router._km(i, d) - direct_km
 
         pool["extra_km"] = pool["name"].map(detour_km)
-        before = len(pool)
-        pool = pool[pool["extra_km"] <= direct_km * max_extra_ratio]
+        n0 = len(pool)
+        keep_cap = direct_km * max_extra_ratio
+        pool = pool[pool["extra_km"] <= keep_cap]
 
-        if len(pool) < 2:  # too strict? rescue with the 3 closest candidates
-            fallback = self.rec.recommend(interests, top_n=3)
-            fallback["extra_km"] = fallback["name"].map(detour_km)   # measure them too!
-            fallback = fallback[fallback["extra_km"] <= direct_km * max_extra_ratio]
-            if fallback.empty:
-                # everything is far — better a longer trip than no trip at all:
-                # keep the 2 candidates with the SMALLEST detours
-                fallback = self.rec.recommend(interests, top_n=2)
-                fallback["extra_km"] = fallback["name"].map(detour_km)
-                fallback = fallback.sort_values("extra_km")
-            pool = pd.concat([pool, fallback]).drop_duplicates(subset=["name"])
-            pool = pool.sort_values("extra_km")
+        # REAL-DATA LESSON (325-place dataset): the top-9 interest matches can
+        # ALL sit far off the corridor (e.g. Konark on a Delhi→Agra trip — that
+        # made a 4,614 km "route"!). Instead of accepting a huge detour, WIDEN
+        # the candidate pool and let the corridor decide: near-and-interesting
+        # beats far-and-perfect-match. (With 20-place samples this never fired.)
+        if len(pool) < n_places:
+            wider = self.rec.recommend(interests, top_n=max(n_places * 4, 24)).copy()
+            wider["extra_km"] = wider["name"].map(detour_km)
+            wider = wider[wider["extra_km"] <= keep_cap]
+            if len(wider) > len(pool):
+                print(f"🔎 Widened search: +{len(wider)} corridor-fitting candidate(s)")
+                pool = pd.concat([pool, wider]).drop_duplicates(subset=["name"])
 
-        dropped = max(before - len(pool), 0)   # fallback may ADD rows — never negative
+        if len(pool) < 2:
+            # everything is far — better a longer trip than no trip at all:
+            # keep the 2 candidates with the SMALLEST detours
+            wider = self.rec.recommend(interests, top_n=max(n_places * 4, 24)).copy()
+            wider["extra_km"] = wider["name"].map(detour_km)
+            pool = wider.sort_values("extra_km").head(2)
+
+        dropped = max(n0 - len(pool), 0)
         if dropped > 0:
             print(f"✂️  Dropped {dropped} place(s) far off the {origin} → {destination} corridor")
 

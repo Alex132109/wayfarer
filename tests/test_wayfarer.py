@@ -120,6 +120,18 @@ def test_recommender_zero_score_filter(india):
     assert rec.recommend(["quantum", "chromodynamics"]).empty
 
 
+def test_corridor_filter_scales_to_real_data(india):
+    """REAL-data regression (325-place dataset): Delhi→Agra with temple/history
+    interests MUST stay in the corridor. Widened-search bug it pins: the old
+    rescue re-picked by match score and produced a 4,614 km Delhi→Karnataka→
+    Odisha→Agra 'route'."""
+    planner = TripPlanner(india)
+    route, total, _ = planner.plan("India Gate", "Taj Mahal",
+                                   ["Temple", "Historical"], n_places=5, days=3)
+    assert total < 1000, f"corridor filter failed: {total:.0f} km"
+    assert len(route) >= 3
+
+
 # ---------------------------------------------------------------- #
 #  Router                                                            #
 # ---------------------------------------------------------------- #

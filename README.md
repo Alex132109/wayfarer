@@ -1,7 +1,7 @@
 # 🧭 Wayfarer
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
-![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-28%20passing-brightgreen)
 ![ML](https://img.shields.io/badge/ML-TF--IDF%20%2B%20hybrid%20scoring-orange)
 ![Roads](https://img.shields.io/badge/distances-real%20road%20km%20(OSRM)-9cf)
 
@@ -211,6 +211,22 @@ If that prints a nice table of Indian destinations — you're ready. 🎉
 ---
 
 ## 📊 Datasets (Week 1 goal)
+
+### 🇮🇳 REAL India data — 325 places, 33 states ✅ BUILT
+
+`data/raw/places_india.csv` is generated from the Kaggle dataset
+["Top Indian Places to Visit"](https://www.kaggle.com/datasets/dhrubangtalukdar/top-indian-places-to-visit-indian-tourism)
+(credit: Kaggle user *dhrubangtalukdar*), with GPS coordinates geocoded via the free
+OpenStreetMap **Nominatim** API (results disk-cached forever in `data/cache/`):
+
+```bash
+.venv\Scripts\python src\build_india_dataset.py   # needs ~/.kaggle/kaggle.json
+```
+
+The pipeline: **download → clean → enrich (geocode) → save** — and `find_data_file`
+automatically serves the real file instead of the sample (raw/ wins over sample/).
+
+### Starter sample (works from Day 1, no downloads)
 
 Search on [Kaggle](https://www.kaggle.com/datasets) for:
 

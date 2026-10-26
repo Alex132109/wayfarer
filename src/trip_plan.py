@@ -50,6 +50,7 @@ class TripPlan:
         "meal_caps": None,          # {day: {'breakfast': ₹}} user edits
         "skip_places": None,        # names to remove from the route
         "is_international": False,  # aware of domestic vs foreign trips
+        "month": None,              # travel month → in-season signal in hybrid scoring
     }
 
     def __init__(self, planner, **inputs):
@@ -97,7 +98,7 @@ class TripPlan:
         else:
             route_df, total_km, stay_plan = planner.plan(
                 o, d, inp["interests"], n_places=inp["n_places"],
-                days=inp["days"])
+                days=inp["days"], month=inp["month"])
 
         # 2. MONEY — style tier scales every daily line
         money = estimate_budget(days=inp["days"], travellers=inp["travellers"],
