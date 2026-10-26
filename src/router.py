@@ -166,7 +166,9 @@ class RouteOptimizer:
                 "stop": len(rows) + 1,
                 "name": f"↩️ Back to {self.names[route[0]]}",
                 "city": self.places.iloc[route[0]].get("city", ""),
-                "rating": "", "entry_fee_inr": "", "km_to_next": 0.0,
+                # None (not "") — keeps numeric columns numeric so the website's
+                # float() calls and pd.notna() checks never blow up on strings.
+                "rating": None, "entry_fee_inr": None, "km_to_next": 0.0,
             })
         return pd.DataFrame(rows), float(sum(legs))
 

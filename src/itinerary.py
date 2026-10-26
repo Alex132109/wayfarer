@@ -94,17 +94,26 @@ class TripPlanner:
         before = len(pool)
         pool = pool[pool["extra_km"] <= direct_km * max_extra_ratio]
 
-        if len(pool) < 2:  # too strict? keep the 3 closest candidates instead
-            pool = pd.concat([pool, self.rec.recommend(interests, top_n=3)])
-            pool = pool.drop_duplicates(subset=["name"]).sort_values("extra_km")
+        if len(pool) < 2:  # too strict? rescue with the 3 closest candidates
+            fallback = self.rec.recommend(interests, top_n=3)
+            fallback["extra_km"] = fallback["name"].map(detour_km)   # measure them too!
+            fallback = fallback[fallback["extra_km"] <= direct_km * max_extra_ratio]
+            if fallback.empty:
+                # everything is far — better a longer trip than no trip at all:
+                # keep the 2 candidates with the SMALLEST detours
+                fallback = self.rec.recommend(interests, top_n=2)
+                fallback["extra_km"] = fallback["name"].map(detour_km)
+                fallback = fallback.sort_values("extra_km")
+            pool = pd.concat([pool, fallback]).drop_duplicates(subset=["name"])
+            pool = pool.sort_values("extra_km")
 
-        dropped = before - len(pool)
+        dropped = max(before - len(pool), 0)   # fallback may ADD rows — never negative
         if dropped > 0:
             print(f"✂️  Dropped {dropped} place(s) far off the {origin} → {destination} corridor")
 
         # 3. Order them (router — greedy + 2-opt) and split into days
         route_df, total_km = self.router.build_route(origin, destination, pool["name"].tolist())
-        stay_plan = self._split_days(route_df, days, origin, destination) if days > 0 else None
+        stay_plan = self._split_days(route_df, days, origin, destination) if days and days > 0 else None
         return route_df, total_km, stay_plan
 
     # ------------------------------------------------------------ #
@@ -114,7 +123,7 @@ class TripPlanner:
         """Route EXACTLY the stops the user listed (order optimized for them).
         Round trips work: origin == destination (e.g. Berhampur → Berhampur)."""
         route_df, total_km = self.router.build_route(origin, destination, list(stops))
-        stay_plan = self._split_days(route_df, days, origin, destination) if days > 0 else None
+        stay_plan = self._split_days(route_df, days, origin, destination) if days and days > 0 else None
         return route_df, total_km, stay_plan
 
     # ------------------------------------------------------------ #
@@ -177,6 +186,8 @@ class TripPlanner:
     def _chunk_days(self, route_df, names, total_days, round_trip):
         """No curation available → split the ordered stops evenly across days.
         Stay town = city of the LAST stop in each day's chunk."""
+        if total_days <= 0 or not names:
+            return None
         chunk = math.ceil(len(names) / total_days)
         cityof = dict(zip(route_df["name"].astype(str), route_df["city"]))
         kmof = dict(zip(route_df["name"].astype(str), route_df["km_to_next"]))

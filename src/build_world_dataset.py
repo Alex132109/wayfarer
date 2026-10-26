@@ -58,6 +58,10 @@ def download_xml() -> Path:
     try:
         with urlopen(req, timeout=120) as resp:
             content = resp.read()
+    except urllib.error.HTTPError as e:
+        # HTTP problems (404/500…) are NOT SSL failures — retrying without
+        # verification would be wrong. Report it honestly and stop.
+        raise RuntimeError(f"❌ UNESCO server answered HTTP {e.code} — try again later.") from e
     except (ssl.SSLError, urllib.error.URLError) as e:
         print(f"⚠️  SSL check failed ({e.reason if isinstance(e, urllib.error.URLError) else e}) — retrying without verification ...")
         ctx = ssl.create_default_context()

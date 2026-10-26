@@ -12,6 +12,9 @@ __pycache__/
 # Datasets (don't commit big CSVs — keep them local)
 data/raw/*.csv
 
+# Streamlit secrets (API keys NEVER go in code or git)
+.streamlit/secrets.toml
+
 # IDE
 .vscode/
 .idea/

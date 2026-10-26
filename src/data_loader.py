@@ -84,10 +84,21 @@ def clean_places(df: pd.DataFrame) -> pd.DataFrame:
     """Clean the data — real-world data is ALWAYS messy. This makes it usable."""
     df = df.copy()
 
+    # GUARANTEE the standard columns exist — everything downstream (recommender,
+    # router, website) can then index them safely without KeyError crashes.
+    # Real Kaggle exports love dropping whole columns; missing ≠ broken now.
+    defaults = {
+        "name": "", "city": "", "state": "", "category": "",
+        "rating": float("nan"), "lat": float("nan"), "lon": float("nan"),
+        "avg_time_hours": 2.0, "entry_fee_inr": 0, "best_time": "",
+    }
+    for col, fill in defaults.items():
+        if col not in df.columns:
+            df[col] = fill
+
     # Strip whitespace from text columns
     for col in ["name", "city", "state", "category"]:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+        df[col] = df[col].astype(str).str.strip()
 
     # Remove exact duplicate places
     before = len(df)
@@ -97,20 +108,27 @@ def clean_places(df: pd.DataFrame) -> pd.DataFrame:
         print(f"🧹 Removed {dropped} duplicate place(s)")
 
     # Fix numbers (ratings can't exceed 5, coordinates can't be zero-text)
-    if "rating" in df.columns:
-        df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
-        df["rating"] = df["rating"].clip(0, 5)
-        df["rating"] = df["rating"].fillna(df["rating"].median())
+    df["rating"] = pd.to_numeric(df["rating"], errors="coerce").clip(0, 5)
+    df["rating"] = df["rating"].fillna(df["rating"].median())
+    df["entry_fee_inr"] = pd.to_numeric(df["entry_fee_inr"], errors="coerce").fillna(0)
+    df["avg_time_hours"] = pd.to_numeric(df["avg_time_hours"], errors="coerce").fillna(2.0)
 
-    if "entry_fee_inr" in df.columns:
-        df["entry_fee_inr"] = pd.to_numeric(df["entry_fee_inr"], errors="coerce").fillna(0)
+    # Coordinates: force-convert to numbers and keep only SANE values.
+    # (A stray lat="abc" or lon=9314 would poison EVERY distance in the trip!
+    # Out-of-range values become NaN and the row is dropped — NOT clipped,
+    # because clip(9314 → 180) would mint a fake point at the antimeridian.)
+    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
+    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
+    df["lat"] = df["lat"].where(df["lat"].between(-90, 90))
+    df["lon"] = df["lon"].where(df["lon"].between(-180, 180))
+    df = df.dropna(subset=["lat", "lon"]).reset_index(drop=True)
 
-    if "avg_time_hours" in df.columns:
-        df["avg_time_hours"] = pd.to_numeric(df["avg_time_hours"], errors="coerce").fillna(2.0)
-
-    # Drop rows without coordinates (we need them for routing)
-    if "lat" in df.columns and "lon" in df.columns:
-        df = df.dropna(subset=["lat", "lon"]).reset_index(drop=True)
+    # Fail loudly if the dataset can't be routed at all.
+    if df.empty:
+        raise ValueError(
+            "❌ No places with usable coordinates in this dataset — "
+            "Wayfarer needs 'lat'/'lon' (or 'latitude'/'longitude') GPS columns."
+        )
 
     return df
 

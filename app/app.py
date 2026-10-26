@@ -143,6 +143,19 @@ def short(name: str, width: int = 58) -> str:
     return name if len(name) <= width else name[: width - 1] + "…"
 
 
+def _num(val) -> float | None:
+    """Safely read any cell as a number — returns None instead of crashing.
+
+    Datasets carry messy values ("" empty strings, NaN, stray text). This
+    helper is the website's seatbelt: numeric columns stay numeric.
+    """
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return None
+    return f if pd.notna(f) else None
+
+
 # ---------------------------------------------------------------- #
 #  Renderers (styled HTML)                                         #
 # ---------------------------------------------------------------- #
@@ -168,11 +181,11 @@ def journey_html(route_df: pd.DataFrame) -> str:
         is_ret = nm.startswith("↩️")
         num_cls = "num ret" if is_ret else "num"
         num = "↩" if is_ret else str(int(r["stop"]))
-        rating = r.get("rating")
-        rate = f"⭐ {float(rating):.1f} · " if pd.notna(rating) else ""
-        fee = float(r["entry_fee_inr"]) if pd.notna(r["entry_fee_inr"]) else 0
+        rating = _num(r.get("rating"))
+        rate = f"⭐ {rating:.1f} · " if rating is not None else ""
+        fee = _num(r.get("entry_fee_inr")) or 0.0
         fee_chip = f"🎟 ₹{int(fee):,}" if fee > 0 else "🎟 free"
-        kmn = float(r["km_to_next"])
+        kmn = _num(r.get("km_to_next")) or 0.0
         km_chip = "" if (is_ret or kmn == 0) else f"→ {kmn:,.0f} km"
         rows.append(
             f'<div class="stop"><div class="{num_cls}">{num}</div>'
@@ -261,14 +274,26 @@ if st.button("Plan my trip 🧭", type="primary"):
             else:
                 route_df, total_km, stay_plan = planner.plan_explicit(
                     origin, destination, stops, days=int(days))
-        except ValueError as e:
-            st.error(str(e))
+        except (ValueError, KeyError, IndexError) as e:
+            st.error(f"Couldn't plan that trip: {e}")
             st.stop()
+
+    # Remember the plan — Streamlit re-runs this script on EVERY widget change,
+    # so without this the itinerary would vanish as soon as the user edits
+    # anything in the sidebar.
+    st.session_state["last_plan"] = {
+        "key": key, "route_df": route_df, "total_km": total_km,
+        "stay_plan": stay_plan, "days": int(days),
+    }
+
+plan = st.session_state.get("last_plan")
+if plan and plan["key"] == key:
+    route_df, total_km, stay_plan = plan["route_df"], plan["total_km"], plan["stay_plan"]
 
     is_round = str(route_df.iloc[-1]["name"]).startswith("↩️")
     cityof = dict(zip(route_df["name"].astype(str), route_df["city"]))
 
-    st.markdown(metrics_html(total_km, len(route_df), int(days), is_round),
+    st.markdown(metrics_html(total_km, len(route_df), int(plan["days"]), is_round),
                 unsafe_allow_html=True)
 
     # map (points of the journey)
@@ -288,7 +313,7 @@ if st.button("Plan my trip 🧭", type="primary"):
         st.subheader("📅 Day-wise plan with stays")
         render_day_cards(stay_plan, cityof)
         if is_round:
-            ret = float(route_df.iloc[-2]["km_to_next"])
+            ret = _num(route_df.iloc[-2]["km_to_next"]) or 0.0
             if ret > LONG_DRIVE_KM:
                 st.warning(f"🚗 Return drive ≈ {ret:,.0f} km — add buffer days or consider flying back!")
 
@@ -296,5 +321,7 @@ if st.button("Plan my trip 🧭", type="primary"):
         st.dataframe(route_df, use_container_width=True, hide_index=True)
 
     st.caption("ℹ️ Distances are straight-line (great-circle); road km are usually 20–30% more.")
+elif plan:
+    st.info("The sidebar changed — click **Plan my trip** to refresh your itinerary.")
 else:
     st.info("👆 Set your trip in the sidebar, then click **Plan my trip**!")
